@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx prisma init:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(timeout 5 npx tsx:*)"
+    ]
+  }
+}

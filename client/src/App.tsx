@@ -1,41 +1,16 @@
-import { useRef } from 'react';
-import { IRefPhaserGame, PhaserGame } from './PhaserGame';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import HomePage from "./pages/HomePage";
 
-function App()
-{
-
-    //  References to the PhaserGame component (game and scene are exposed)
-    const phaserRef = useRef<IRefPhaserGame | null>(null);
-
-    const addSprite = () => {
-
-        if (phaserRef.current)
-        {
-            const scene = phaserRef.current.scene;
-
-            if (scene)
-            {
-                // Add a new sprite to the current scene at a random position
-                const x = Phaser.Math.Between(64, scene.scale.width - 64);
-                const y = Phaser.Math.Between(64, scene.scale.height - 64);
-    
-                //  `add.sprite` is a Phaser GameObjectFactory method and it returns a Sprite Game Object instance
-                const star = scene.add.sprite(x, y, 'star');
-    
-            }
-        }
-    }
-
+function App() {
     return (
-        <div id="app">
-            <PhaserGame ref={phaserRef} />
-            <div>
-                <div>
-                    <button className="button" onClick={addSprite}>Add New Sprite</button>
-                </div>
-            </div>
-        </div>
-    )
+        <BrowserRouter>
+            <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/join/:roomCode" element={<div className="text-white p-8">Rejoindre la room — à implémenter</div>} />
+                <Route path="/game/:slug/new" element={<div className="text-white p-8">Créer une partie — à implémenter</div>} />
+            </Routes>
+        </BrowserRouter>
+    );
 }
 
-export default App
+export default App;

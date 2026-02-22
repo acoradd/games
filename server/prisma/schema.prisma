@@ -1,0 +1,38 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["games"]
+}
+
+model GameMode {
+  id           Int      @id @default(autoincrement())
+  name         String
+  slug         String   @unique
+  description  String?
+  minPlayers   Int      @default(2) @map("min_players")
+  maxPlayers   Int      @default(4) @map("max_players")
+  thumbnailUrl String?  @map("thumbnail_url")
+  isActive     Boolean  @default(true) @map("is_active")
+  options      Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("game_modes")
+  @@schema("games")
+}
+
+model Player {
+  id           Int      @id @default(autoincrement())
+  username     String
+  isAnonymous  Boolean  @default(true) @map("is_anonymous")
+  passwordHash String?  @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+
+  @@map("players")
+  @@schema("games")
+}
