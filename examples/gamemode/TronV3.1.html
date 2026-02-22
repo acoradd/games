@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>TRON / SNAKE — P2P</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:    #06090c;
+  --c1:    #00ffcc;
+  --c2:    #ff2d78;
+  --c3:    #aaff00;
+  --c4:    #ff9900;
+  --dim:   rgba(0,255,204,0.12);
+  --border:rgba(0,255,204,0.18);
+  --text:  #b8ddd6;
+  --panel: rgba(4,18,22,0.92);
+}
+
+html, body {
+  width:100%; height:100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+}
+
+/* CRT scanlines */
+body::after {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:999;
+  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px);
+}
+
+#app {
+  width:100vw; height:100vh;
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* ── SCREENS ── */
+.screen { display:none; width:100%; height:100%; align-items:center; justify-content:center; }
+.screen.active { display:flex; }
+
+/* ── SHARED ── */
+.logo {
+  font-family:'Orbitron',sans-serif; font-weight:900;
+  font-size: clamp(2.4rem,5vw,4.2rem);
+  letter-spacing:.35em;
+  color: var(--c1);
+  text-shadow: 0 0 18px var(--c1), 0 0 60px rgba(0,255,204,.25);
+  user-select:none;
+}
+.logo b { color:var(--c2); text-shadow:0 0 18px var(--c2); font-weight:900; }
+
+.tagline {
+  font-size:.72rem; letter-spacing:.22em; color:rgba(184,221,214,.4);
+  text-transform:uppercase; margin-top:4px;
+}
+
+.panel {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:3px;
+  padding:28px 36px;
+  position:relative; overflow:hidden;
+  backdrop-filter:blur(12px);
+}
+.panel::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent,var(--c1),transparent);
+}
+
+.lbl { font-size:.68rem; letter-spacing:.22em; color:var(--c1); text-transform:uppercase; margin-bottom:7px; }
+
+input[type=text] {
+  width:100%; background:rgba(0,255,204,.05);
+  border:1px solid rgba(0,255,204,.28); border-radius:2px;
+  color:var(--c1); font-family:'Share Tech Mono',monospace; font-size:1rem;
+  padding:9px 13px; outline:none; letter-spacing:.08em;
+  transition:border-color .2s, box-shadow .2s;
+}
+input[type=text]:focus { border-color:var(--c1); box-shadow:0 0 10px rgba(0,255,204,.2); }
+input[type=text]::placeholder { color:rgba(0,255,204,.3); }
+
+.btn {
+  font-family:'Orbitron',sans-serif; font-weight:700;
+  font-size:.78rem; letter-spacing:.18em; text-transform:uppercase;
+  padding:11px 26px; border:none; border-radius:2px;
+  cursor:pointer; transition:all .15s;
+}
+.btn-pri  { background:var(--c1); color:#000; }
+.btn-pri:hover { background:#fff; box-shadow:0 0 22px var(--c1); }
+.btn-sec  { background:transparent; color:var(--c1); border:1px solid var(--c1); }
+.btn-sec:hover { background:rgba(0,255,204,.1); }
+.btn-red  { background:var(--c2); color:#fff; }
+.btn-red:hover { box-shadow:0 0 22px var(--c2); }
+.btn:disabled { opacity:.3; cursor:not-allowed; }
+.btn-full { width:100%; }
+
+/* ── HOME ── */
+#s-home { flex-direction:column; gap:28px; }
+.home-cards { display:flex; gap:16px; }
+.home-card {
+  flex:1; min-width:200px; padding:24px 20px; cursor:pointer;
+  background:rgba(0,255,204,.04); border:1px solid rgba(0,255,204,.1);
+  border-radius:3px; text-align:center; transition:all .2s;
+}
+.home-card:hover { background:rgba(0,255,204,.1); border-color:var(--c1); box-shadow:0 0 20px rgba(0,255,204,.1); }
+.home-card-icon { font-size:2.2rem; margin-bottom:10px; }
+.home-card-title { font-family:'Orbitron',sans-serif; font-size:.85rem; letter-spacing:.15em; color:var(--c1); margin-bottom:6px; }
+.home-card-desc  { font-size:.72rem; color:rgba(184,221,214,.5); line-height:1.6; }
+
+/* ── HOST SETUP ── */
+#s-host-setup { flex-direction:column; gap:22px; align-items:center; }
+.setup-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; width:100%; max-width:560px; }
+.setup-full { grid-column:1/-1; }
+
+.mode-row { display:flex; gap:8px; }
+.mode-btn {
+  flex:1; padding:10px; border-radius:2px; cursor:pointer;
+  background:transparent; border:1px solid rgba(0,255,204,.18);
+  color:var(--text); font-family:'Orbitron',sans-serif; font-size:.75rem;
+  letter-spacing:.1em; transition:all .2s;
+}
+.mode-btn.on { background:rgba(0,255,204,.14); border-color:var(--c1); color:var(--c1); box-shadow:0 0 10px rgba(0,255,204,.1); }
+
+.count-row { display:flex; gap:6px; }
+.cnt-btn {
+  width:42px; height:42px; border-radius:2px; cursor:pointer;
+  background:transparent; border:1px solid rgba(0,255,204,.18);
+  color:var(--text); font-family:'Orbitron',sans-serif; font-size:.95rem;
+  transition:all .15s;
+}
+.cnt-btn.on { background:rgba(0,255,204,.14); border-color:var(--c1); color:var(--c1); }
+
+.slider-row { display:flex; align-items:center; gap:10px; }
+input[type=range] {
+  flex:1; -webkit-appearance:none; height:3px;
+  background:rgba(0,255,204,.2); border-radius:2px; outline:none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+  background:var(--c1); cursor:pointer; box-shadow:0 0 6px var(--c1);
+}
+input[type=range]:disabled { opacity:.3; }
+.sv { color:var(--c1); font-size:.85rem; min-width:20px; text-align:right; }
+
+/* ── LOBBY ── */
+#s-lobby { flex-direction:row; gap:20px; align-items:flex-start; padding:30px 20px; }
+
+.room-id-box {
+  text-align:center; padding:20px;
+  background:rgba(0,0,0,.5); border:1px solid rgba(0,255,204,.3);
+  border-radius:3px; margin-bottom:12px;
+}
+.room-id-label { font-size:.65rem; letter-spacing:.22em; color:rgba(184,221,214,.45); margin-bottom:8px; text-transform:uppercase; }
+.room-id-val {
+  font-family:'Orbitron',sans-serif; font-size:2.2rem; font-weight:900;
+  color:var(--c1); letter-spacing:.4em;
+  text-shadow:0 0 20px var(--c1), 0 0 40px rgba(0,255,204,.3);
+  cursor:pointer; user-select:all;
+}
+.room-id-hint { font-size:.65rem; color:rgba(184,221,214,.35); margin-top:8px; }
+
+.sec-title {
+  font-family:'Orbitron',sans-serif; font-size:.68rem; letter-spacing:.28em;
+  color:var(--c1); text-transform:uppercase; margin-bottom:14px;
+  padding-bottom:7px; border-bottom:1px solid var(--border);
+}
+
+.plist { display:flex; flex-direction:column; gap:8px; }
+.prow {
+  display:flex; align-items:center; gap:10px;
+  padding:9px 13px; background:rgba(0,255,204,.03);
+  border:1px solid rgba(0,255,204,.07); border-radius:2px;
+}
+.pdot { width:9px; height:9px; border-radius:50%; flex-shrink:0; box-shadow:0 0 7px currentColor; }
+.pname { flex:1; font-size:.86rem; }
+.pbadge { font-size:.6rem; letter-spacing:.1em; color:var(--c4); border:1px solid rgba(255,153,0,.3); padding:2px 5px; border-radius:2px; }
+.pslot { opacity:.28; font-size:.78rem; font-style:italic; }
+
+.status-line { font-size:.74rem; color:rgba(184,221,214,.4); letter-spacing:.1em; text-align:center; min-height:18px; }
+
+/* ── JOIN ── */
+#s-join { flex-direction:column; gap:22px; align-items:center; }
+
+/* ── GAME ── */
+#s-game { flex-direction:row; gap:18px; align-items:center; padding:16px; }
+#canvas {
+  border:1px solid rgba(0,255,204,.14);
+  box-shadow:0 0 50px rgba(0,255,204,.06), inset 0 0 60px rgba(0,0,0,.6);
+  image-rendering:pixelated; flex-shrink:0;
+  touch-action:none;
+}
+.sidebar { display:flex; flex-direction:column; gap:14px; min-width:196px; }
+.sboard { display:flex; flex-direction:column; gap:7px; }
+.srow {
+  display:flex; align-items:center; gap:9px;
+  padding:8px 11px; background:rgba(0,0,0,.28);
+  border-left:3px solid transparent; border-radius:0 2px 2px 0;
+  transition:all .25s;
+}
+.srow.alive { border-left-color:var(--pc); }
+.srow.dead { opacity:.35; filter:grayscale(1); }
+.sname { flex:1; font-size:.82rem; }
+.sscore { color:var(--c1); font-size:.86rem; }
+
+.hint-box { font-size:.68rem; color:rgba(184,221,214,.32); line-height:1.9; }
+.k {
+  display:inline-block; background:rgba(0,255,204,.09);
+  border:1px solid rgba(0,255,204,.2); padding:0 5px; border-radius:2px; font-size:.66rem;
+}
+
+.conn-pill {
+  font-size:.66rem; letter-spacing:.12em; padding:3px 9px; border-radius:2px; text-align:center;
+}
+.ok  { color:var(--c3); border:1px solid rgba(170,255,0,.25); }
+.err { color:var(--c2); border:1px solid rgba(255,45,120,.25); }
+
+/* ── GAMEOVER ── */
+#s-gameover { flex-direction:column; gap:22px; align-items:center; }
+.big-result { font-family:'Orbitron',sans-serif; font-weight:900; font-size:2.4rem; letter-spacing:.08em; animation:gpulse 1.6s ease-in-out infinite; }
+@keyframes gpulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+.res-label { font-size:.72rem; letter-spacing:.28em; color:rgba(184,221,214,.4); text-transform:uppercase; margin-bottom:6px; }
+.fscores { display:flex; flex-direction:column; gap:8px; width:100%; max-width:300px; }
+.frow { display:flex; align-items:center; gap:11px; padding:9px 14px; border:1px solid rgba(0,255,204,.1); border-radius:2px; }
+
+/* ── OVERLAY countdown ── */
+#ov { position:fixed; inset:0; background:rgba(0,0,0,.82); display:none; align-items:center; justify-content:center; z-index:200; }
+#ov.on { display:flex; }
+.ov-txt { font-family:'Orbitron',sans-serif; font-size:3rem; font-weight:900; color:var(--c1); text-shadow:0 0 40px var(--c1); letter-spacing:.2em; }
+
+/* ── CONNECTING anim ── */
+#s-connecting { flex-direction:column; gap:18px; text-align:center; }
+.spin { width:38px; height:38px; border:2px solid rgba(0,255,204,.18); border-top-color:var(--c1); border-radius:50%; animation:rot .7s linear infinite; margin:0 auto; }
+@keyframes rot { to{transform:rotate(360deg)} }
+
+.err-msg { color:var(--c2); font-size:.78rem; letter-spacing:.1em; min-height:18px; text-align:center; }
+
+/* ── MOBILE / RESPONSIVE ── */
+.desktop-only { display:flex; }
+.mobile-only  { display:none; }
+
+/* D-pad */
+.dpad {
+  position:fixed; bottom:20px; right:20px;
+  z-index:50; user-select:none; touch-action:none;
+}
+.dpad-grid {
+  display:grid; grid-template-columns:repeat(3, 64px); grid-template-rows:repeat(3, 64px);
+  gap:4px;
+}
+.dpad-btn {
+  width:64px; height:64px; border-radius:8px;
+  background:rgba(0,255,204,.12); border:1px solid rgba(0,255,204,.25);
+  color:var(--c1); font-size:1.4rem;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:background .1s, transform .1s;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+.dpad-btn:active, .dpad-btn.pressed {
+  background:rgba(0,255,204,.35);
+  transform:scale(.93);
+  box-shadow:0 0 14px rgba(0,255,204,.3);
+}
+.dpad-center {
+  width:64px; height:64px; border-radius:8px;
+  background:rgba(0,255,204,.04); border:1px solid rgba(0,255,204,.1);
+}
+
+/* Mobile top bar */
+.mobile-topbar {
+  position:fixed; top:0; left:0; right:0; z-index:50;
+  background:rgba(6,9,12,.88); backdrop-filter:blur(8px);
+  padding:6px 12px; display:flex; align-items:center; gap:10px;
+  border-bottom:1px solid rgba(0,255,204,.1);
+}
+.mobile-topbar .sboard { flex:1; flex-direction:row; gap:8px; flex-wrap:wrap; }
+.mobile-topbar .srow { padding:4px 8px; font-size:.72rem; }
+
+/* Swipe zone — for mobile alternative to D-pad */
+#swipe-zone {
+  position:fixed; inset:0; z-index:40; display:none;
+  touch-action:none;
+}
+
+@media (max-width: 700px), (max-height: 600px), (pointer: coarse) {
+  .desktop-only { display:none !important; }
+  .mobile-only  { display:flex !important; }
+
+  /* Game screen: canvas fills screen */
+  #s-game {
+    flex-direction:column;
+    padding:0;
+    gap:0;
+    position:relative;
+  }
+  #canvas {
+    width:100vw !important;
+    height:100vw !important; /* square on mobile */
+    max-height:calc(100vh - 160px);
+    border:none;
+    box-shadow:none;
+    margin-top:44px; /* space for topbar */
+  }
+
+  /* Home screen: stack cards */
+  #s-home { gap:20px; padding:20px; }
+  .home-cards { flex-direction:column; gap:12px; width:100%; max-width:360px; }
+  .home-card { padding:18px 16px; }
+
+  /* Host setup: single column, scrollable */
+  #s-host-setup {
+    overflow-y: auto;
+    padding: 16px;
+    justify-content: flex-start;
+    padding-top: 20px;
+    gap: 12px;
+  }
+  #s-host-setup .logo { font-size: clamp(1.2rem, 6vw, 1.8rem) !important; }
+  .setup-grid { grid-template-columns:1fr; width:100%; max-width:400px; }
+  .setup-full { grid-column:1; }
+
+  /* Lobby: stack columns */
+  #s-lobby {
+    flex-direction:column;
+    align-items:center;
+    overflow-y:auto;
+    padding:16px;
+    gap:12px;
+  }
+  #s-lobby > div { min-width:0; width:100%; max-width:420px; }
+
+  /* Panels: tighter on mobile */
+  .panel { padding:18px 16px; }
+
+  /* Logo smaller */
+  .logo { font-size:clamp(1.6rem,8vw,2.8rem); }
+
+  /* Gameover */
+  #s-gameover { padding:20px; gap:16px; }
+  .big-result { font-size:1.8rem; }
+
+  /* Waiting screen */
+  #s-waiting { padding:20px; }
+  #waiting-plist { width:100%; max-width:340px; }
+
+  /* Join screen */
+  #s-join { padding:20px; }
+  #s-join .panel { width:100%; max-width:400px; }
+
+  /* Buttons larger touch targets */
+  .btn { padding:14px 24px; font-size:.8rem; }
+  .dpad { bottom:16px; right:16px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- CONNECTING -->
+  <div id="s-connecting" class="screen active">
+    <div class="logo">TR<b>ON</b></div>
+    <div class="spin"></div>
+    <div class="tagline">Initialisation PeerJS…</div>
+  </div>
+
+  <!-- HOME -->
+  <div id="s-home" class="screen">
+    <div class="logo">TR<b>ON</b></div>
+    <div class="tagline">P2P · Réseau Local · 2–4 Joueurs</div>
+    <div class="home-cards">
+      <div class="home-card" onclick="goHostSetup()">
+        <div class="home-card-icon">👑</div>
+        <div class="home-card-title">Créer</div>
+        <div class="home-card-desc">Héberger une partie<br>et inviter des joueurs</div>
+      </div>
+      <div class="home-card" onclick="goJoin()">
+        <div class="home-card-icon">🎮</div>
+        <div class="home-card-title">Rejoindre</div>
+        <div class="home-card-desc">Entrer le code<br>d'une partie existante</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOST SETUP -->
+  <div id="s-host-setup" class="screen">
+    <div class="logo" style="font-size:2rem">CONFIGURATION</div>
+    <div class="panel" style="width:min(560px, 96vw)">
+      <div class="setup-grid">
+
+        <div>
+          <div class="lbl">Votre pseudo</div>
+          <input type="text" id="host-name" maxlength="20" placeholder="Votre nom…">
+        </div>
+
+        <div>
+          <div class="lbl">Nombre de joueurs</div>
+          <div class="count-row">
+            <button class="cnt-btn on" id="cnt-2" onclick="setCnt(2)">2</button>
+            <button class="cnt-btn" id="cnt-3" onclick="setCnt(3)">3</button>
+            <button class="cnt-btn" id="cnt-4" onclick="setCnt(4)">4</button>
+          </div>
+        </div>
+
+        <div class="setup-full">
+          <div class="lbl">Mode de jeu</div>
+          <div class="mode-row">
+            <button class="mode-btn on" id="m-tron" onclick="setMode('tron')">⚡ TRON — traînée permanente</button>
+            <button class="mode-btn" id="m-snake" onclick="setMode('snake')">🍎 SNAKE — grandit en mangeant</button>
+          </div>
+        </div>
+
+        <div class="setup-full" id="apple-box" style="display:none">
+          <div class="lbl">Fréquence des pommes</div>
+          <div class="slider-row">
+            <span style="font-size:.7rem">Rare</span>
+            <input type="range" id="afreq" min="1" max="10" value="5" oninput="document.getElementById('afv').textContent=this.value">
+            <span id="afv" class="sv">5</span>
+            <span style="font-size:.7rem">Dense</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="lbl">Taille de grille</div>
+          <div class="slider-row">
+            <span style="font-size:.7rem">S</span>
+            <input type="range" id="cfg-grid" min="20" max="80" step="10" value="40"
+              oninput="document.getElementById('cfg-grid-v').textContent=this.value">
+            <span id="cfg-grid-v" class="sv">40</span>
+            <span style="font-size:.7rem">XL</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="lbl">Vitesse</div>
+          <div class="slider-row">
+            <span style="font-size:.7rem">🐢</span>
+            <input type="range" id="cfg-speed" min="1" max="5" step="1" value="3"
+              oninput="document.getElementById('cfg-speed-v').textContent=this.value">
+            <span id="cfg-speed-v" class="sv">3</span>
+            <span style="font-size:.7rem">🐇</span>
+          </div>
+        </div>
+
+      </div>
+      <div style="margin-top:20px; display:flex; gap:10px">
+        <button class="btn btn-sec" onclick="show('s-home')">← Retour</button>
+        <button class="btn btn-pri" style="flex:1" onclick="createRoom()">CRÉER LA PARTIE →</button>
+      </div>
+      <div class="err-msg" id="host-err" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- LOBBY (host) -->
+  <div id="s-lobby" class="screen">
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:300px">
+      <div class="panel">
+        <div class="room-id-box">
+          <div class="room-id-label">Code de la partie</div>
+          <div class="room-id-val" id="room-code" title="Cliquez pour copier" onclick="copyCode()">—</div>
+          <div class="room-id-hint">Cliquez pour copier · Partagez aux autres joueurs</div>
+        </div>
+        <div class="sec-title">Joueurs</div>
+        <div class="plist" id="lobby-plist"></div>
+        <div class="status-line" id="lobby-status" style="margin-top:12px"></div>
+        <div id="local-player-box" style="margin-top:10px; display:none">
+          <button class="btn btn-sec btn-full" id="btn-local-player" onclick="toggleLocalPlayer()">
+            + Joueur local (même clavier)
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-pri btn-full" id="btn-launch" onclick="launchGame()" disabled>LANCER LA PARTIE</button>
+      <button class="btn btn-sec btn-full" onclick="location.reload()">Annuler</button>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:260px">
+      <div class="panel">
+        <div class="sec-title">Configuration</div>
+
+        <div style="margin-bottom:16px">
+          <div class="lbl">Mode de jeu</div>
+          <div class="mode-row">
+            <button class="mode-btn on" id="lm-tron" onclick="setLobbyMode('tron')">⚡ TRON</button>
+            <button class="mode-btn" id="lm-snake" onclick="setLobbyMode('snake')">🍎 SNAKE</button>
+          </div>
+        </div>
+
+        <div id="lobby-apple-box" style="display:none; margin-bottom:16px">
+          <div class="lbl">Fréquence des pommes</div>
+          <div class="slider-row">
+            <span style="font-size:.7rem">Rare</span>
+            <input type="range" id="lfreq" min="1" max="10" value="5" oninput="setLobbyFreq(this.value)">
+            <span id="lfv" class="sv">5</span>
+            <span style="font-size:.7rem">Dense</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="lbl">Nombre de joueurs</div>
+          <div class="count-row">
+            <button class="cnt-btn on" id="lcnt-2" onclick="setLobbyCount(2)">2</button>
+            <button class="cnt-btn" id="lcnt-3" onclick="setLobbyCount(3)">3</button>
+            <button class="cnt-btn" id="lcnt-4" onclick="setLobbyCount(4)">4</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="lbl">Taille de la grille</div>
+          <div class="slider-row">
+            <span style="font-size:.7rem">Large</span>
+            <input type="range" id="lgrid" min="20" max="80" step="10" value="40" oninput="setLobbyGrid(this.value)">
+            <span id="lgv" class="sv">40</span>
+            <span style="font-size:.7rem">Petit</span>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="lbl">Vitesse</div>
+          <div class="slider-row">
+            <span style="font-size:.7rem">Lent</span>
+            <input type="range" id="lspeed" min="1" max="5" step="1" value="3" oninput="setLobbySpeed(this.value)">
+            <span id="lsv" class="sv">3</span>
+            <span style="font-size:.7rem">Rapide</span>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="sec-title" style="margin-bottom:10px">Contrôles clavier</div>
+        <div class="hint-box">
+          <div>Joueur 1 &nbsp;<span class="k">↑</span><span class="k">↓</span><span class="k">←</span><span class="k">→</span></div>
+          <div>Joueur 2* <span class="k">Z</span><span class="k">S</span><span class="k">Q</span><span class="k">D</span></div>
+          <div style="margin-top:6px;color:rgba(184,221,214,.3)">* si 2 joueurs sur même machine</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JOIN -->
+  <div id="s-join" class="screen">
+    <div class="logo" style="font-size:2rem">REJOINDRE</div>
+    <div class="panel" style="min-width:340px">
+      <div class="lbl">Votre pseudo</div>
+      <input type="text" id="join-name" maxlength="20" placeholder="Votre nom…" style="margin-bottom:16px">
+      <div class="lbl">Code de la partie</div>
+      <input type="text" id="join-code" maxlength="20" placeholder="Ex: TRON-ABCD" style="text-transform:uppercase; margin-bottom:20px">
+      <div style="display:flex; gap:10px">
+        <button class="btn btn-sec" onclick="show('s-home')">← Retour</button>
+        <button class="btn btn-pri" style="flex:1" onclick="joinRoom()">REJOINDRE →</button>
+      </div>
+      <div class="err-msg" id="join-err" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- WAITING (guest) -->
+  <div id="s-waiting" class="screen" style="flex-direction:column; gap:18px; text-align:center">
+    <div class="logo" style="font-size:2rem">EN ATTENTE</div>
+    <div class="spin"></div>
+    <div class="tagline" id="waiting-msg">Connexion à l'hôte…</div>
+    <div class="plist" id="waiting-plist" style="min-width:280px; margin-top:8px"></div>
+    <div class="status-line" id="waiting-status"></div>
+  </div>
+
+  <!-- GAME -->
+  <div id="s-game" class="screen">
+    <canvas id="canvas"></canvas>
+    <!-- Desktop sidebar -->
+    <div class="sidebar desktop-only">
+      <div class="panel" style="padding:14px 18px">
+        <div class="sec-title">Scores</div>
+        <div class="sboard" id="scoreboard"></div>
+      </div>
+      <div class="panel" style="padding:14px 18px">
+        <div class="sec-title">Contrôles</div>
+        <div class="hint-box" id="controls-hint">
+          <div>P1 <span class="k">↑</span><span class="k">↓</span><span class="k">←</span><span class="k">→</span></div>
+        </div>
+      </div>
+      <div class="conn-pill ok" id="conn-pill">● CONNECTÉ</div>
+    </div>
+    <!-- Mobile score bar (top) -->
+    <div class="mobile-topbar mobile-only">
+      <div class="sboard" id="scoreboard-mobile"></div>
+      <div class="conn-pill ok" id="conn-pill-mobile" style="font-size:.6rem;padding:2px 7px">●</div>
+    </div>
+    <!-- Mobile D-pad (bottom overlay) -->
+    <div class="dpad mobile-only" id="dpad">
+      <div class="dpad-grid">
+        <div></div>
+        <button class="dpad-btn" id="dbtn-up"    ontouchstart="dpadPress('up')"    ontouchend="dpadRelease()">▲</button>
+        <div></div>
+        <button class="dpad-btn" id="dbtn-left"  ontouchstart="dpadPress('left')"  ontouchend="dpadRelease()">◀</button>
+        <div class="dpad-center"></div>
+        <button class="dpad-btn" id="dbtn-right" ontouchstart="dpadPress('right')" ontouchend="dpadRelease()">▶</button>
+        <div></div>
+        <button class="dpad-btn" id="dbtn-down"  ontouchstart="dpadPress('down')"  ontouchend="dpadRelease()">▼</button>
+        <div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAMEOVER -->
+  <div id="s-gameover" class="screen">
+    <div class="logo" style="font-size:2rem; letter-spacing:.1em">GAME OVER</div>
+    <div>
+      <div class="res-label" id="res-label"></div>
+      <div class="big-result" id="res-name"></div>
+    </div>
+    <div class="fscores" id="fscores"></div>
+    <div style="display:flex;gap:12px;margin-top:8px">
+      <button class="btn btn-pri" id="btn-replay" style="display:none" onclick="sendRestart()">REJOUER</button>
+      <button class="btn btn-sec" onclick="location.reload()">QUITTER</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="ov"><div class="ov-txt" id="ov-txt"></div></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════
+const CELL  = 10;
+const CSIZE = 800; // canvas pixel size (fixed)
+const PCOLORS = ['#00ffcc','#ff2d78','#aaff00','#ff9900'];
+const OPP = {up:'down',down:'up',left:'right',right:'left'};
+const DIRS= {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
+
+// Dynamic — computed from gameCfg each game
+let GRID     = 40;   // cells per side (gameCfg.gridSize)
+let TICK_MS  = 120;  // ms per tick    (gameCfg.speed → mapped)
+let CELL_PX  = CSIZE / GRID; // pixel size of one cell
+
+function applyGridCfg() {
+  GRID    = gameCfg.gridSize;
+  TICK_MS = gameCfg.speed;   // stored as ms directly
+  CELL_PX = CSIZE / GRID;
+}
+
+function getSpawns() {
+  const m = Math.floor(GRID * 0.12);
+  const e = GRID - 1 - m;
+  return [
+    {x:m, y:m, dir:'right'},
+    {x:e, y:e, dir:'left' },
+    {x:e, y:m, dir:'left' },
+    {x:m, y:e, dir:'right'},
+  ];
+}
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let peer = null;         // my Peer instance
+let myId = null;         // PeerJS peer ID
+let roomCode = null;     // short code = host peer ID
+let amHost = false;
+
+// Host only
+let guestConns = {};     // peerId -> DataConnection (guests connected to host)
+let gameLoop   = null;
+let gamePhase  = 'lobby'; // lobby | countdown | playing | over
+
+// Game state (host is authoritative, guests receive snapshots)
+let players = {};        // indexed by slot 0..3
+// players[i] = { id(slot), peerId, name, color, x,y,dir,nextDir,trail,alive,score,trailLen }
+
+let apples = [];
+let gameCfg = { mode:'tron', playerCount:2, appleFrequency:5, gridSize:40, speed:120, speedLevel:3 };
+let mySlot   = 0;
+let localSlot = -1; // slot of the second local player (-1 = none)
+let myConn   = null;
+
+// ═══════════════════════════════════════════════════════
+//  CANVAS
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = CSIZE;
+canvas.height = CSIZE;
+
+function resizeCanvas() {
+  const isMobile = window.innerWidth <= 700 || window.innerHeight <= 600 ||
+                   window.matchMedia('(pointer: coarse)').matches;
+  if (isMobile) {
+    // On mobile: canvas fills width, max height minus topbar + dpad space
+    const sz = Math.min(window.innerWidth, window.innerHeight - 160, CSIZE);
+    canvas.style.width  = sz + 'px';
+    canvas.style.height = sz + 'px';
+  } else {
+    const sz = Math.min(window.innerWidth - 260, window.innerHeight - 36, CSIZE);
+    canvas.style.width  = sz + 'px';
+    canvas.style.height = sz + 'px';
+  }
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ═══════════════════════════════════════════════════════
+//  PEER INIT
+// ═══════════════════════════════════════════════════════
+function makeShortCode() {
+  // 4-char code from unambiguous charset → 32^4 = 1M combinations, plenty for LAN
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'TRON-';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function initPeer(idToUse) {
+  const id = idToUse || makeShortCode();
+
+  peer = new Peer(id, {
+    debug: 0,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' },
+      ],
+      iceTransportPolicy: 'all',
+      iceCandidatePoolSize: 10,
+      sdpSemantics: 'unified-plan',   // Firefox requires this
+      bundlePolicy: 'max-bundle',
+    },
+  });
+
+  peer.on('open', id => {
+    myId = id;
+    console.log('PeerJS ready, ID:', id);
+    show('s-home');
+  });
+
+  peer.on('error', err => {
+    console.error('Peer error:', err.type, err);
+    if (err.type === 'unavailable-id') {
+      peer.destroy();
+      initPeer(null);
+    } else if (err.type === 'peer-unavailable') {
+      document.getElementById('join-err').textContent = 'Code introuvable — vérifiez le code ou relancez l\'hôte';
+      show('s-join');
+    } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed') {
+      console.warn('PeerJS server issue (' + err.type + '), retrying in 3s…');
+      setTimeout(() => { try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch(e){} }, 3000);
+    } else {
+      document.getElementById('host-err').textContent = 'Erreur réseau: ' + err.type;
+      document.getElementById('join-err').textContent  = 'Erreur: ' + err.type;
+    }
+  });
+
+  peer.on('disconnected', () => {
+    console.warn('PeerJS disconnected, reconnecting…');
+    setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch(e){} }, 2000);
+  });
+
+  peer.on('connection', conn => {
+    if (!amHost) return;
+    handleGuestConnect(conn);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  HOST SETUP
+// ═══════════════════════════════════════════════════════
+let hostCfg = { mode:'tron', playerCount:2, appleFrequency:5, gridSize:40, speed:120, speedLevel:3 };
+
+function goHostSetup() { show('s-host-setup'); }
+function goJoin()      { show('s-join'); }
+
+function setCnt(n) {
+  hostCfg.playerCount = n;
+  [2,3,4].forEach(i => document.getElementById('cnt-'+i).classList.toggle('on', i===n));
+}
+function setMode(m) {
+  hostCfg.mode = m;
+  document.getElementById('m-tron').classList.toggle('on', m==='tron');
+  document.getElementById('m-snake').classList.toggle('on', m==='snake');
+  document.getElementById('apple-box').style.display = m==='snake' ? 'block':'none';
+}
+
+function createRoom() {
+  const name = document.getElementById('host-name').value.trim();
+  if (!name) { document.getElementById('host-err').textContent='Entrez votre pseudo'; return; }
+
+  hostCfg.appleFrequency = parseInt(document.getElementById('afreq').value);
+  hostCfg.gridSize   = parseInt(document.getElementById('cfg-grid').value) || 40;
+  const lvl = parseInt(document.getElementById('cfg-speed').value) || 3;
+  hostCfg.speedLevel = lvl;
+  hostCfg.speed      = {1:220,2:160,3:120,4:80,5:50}[lvl] || 120;
+  amHost = true;
+  // Merge hostCfg into the full gameCfg (preserves gridSize, speed, speedLevel defaults)
+  gameCfg = { ...gameCfg, ...hostCfg };
+  roomCode = myId;
+
+  // Init host as slot 0
+  mySlot = 0;
+  players = {};
+  players[0] = makePlayer(0, myId, name);
+  apples = [];
+  gamePhase = 'lobby';
+
+  show('s-lobby');
+  document.getElementById('room-code').textContent = roomCode;
+  renderLobby();
+  renderLobbyConfig();
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(roomCode).catch(()=>{});
+  const el = document.getElementById('room-code');
+  el.textContent = 'COPIÉ !';
+  setTimeout(() => el.textContent = roomCode, 1200);
+}
+
+// Guest connects to host
+function handleGuestConnect(conn) {
+  const slot = nextFreeSlot();
+  if (slot === -1 || gamePhase !== 'lobby') {
+    const reject = () => conn.send({ t:'reject', reason: gamePhase!=='lobby'?'Partie en cours':'Partie pleine' });
+    if (conn.open) reject(); else conn.on('open', reject);
+    return;
+  }
+
+  guestConns[conn.peer] = conn;
+  players[slot] = makePlayer(slot, conn.peer, 'Joueur ' + (slot+1));
+
+  const sendWelcome = () => conn.send({ t:'welcome', slot, cfg: gameCfg, lobby: getLobbySnapshot() });
+  if (conn.open) sendWelcome(); else conn.on('open', sendWelcome);
+
+  conn.on('data', msg => handleHostMsg(conn.peer, msg));
+  conn.on('close', () => { guestLeft(conn.peer); });
+  conn.on('error', () => { guestLeft(conn.peer); });
+}
+
+function handleHostMsg(peerId, msg) {
+  switch(msg.t) {
+    case 'join':
+      // Guest sends their chosen name — slot is already pre-assigned in handleGuestConnect
+      const existing = playerByPeer(peerId);
+      if (existing) {
+        existing.name = msg.name;
+        broadcastLobby();
+      }
+      break;
+
+    case 'input': {
+      const p = playerByPeer(peerId);
+      if (p && p.alive && gamePhase === 'playing') {
+        const valid = ['up','down','left','right'];
+        if (valid.includes(msg.dir) && OPP[msg.dir] !== (p.dir || 'right')) {
+          p.nextDir = msg.dir;
+        }
+      }
+      break;
+    }
+
+    case 'input2':
+      // same-machine second player controlled by host-side keyboard
+      // find first slot != host's slot that is alive
+      if (msg.fromHost) {
+        const p2 = Object.values(players).find(p=> p.id !== mySlot && p.alive);
+        if (p2 && OPP[msg.dir] !== p2.dir) p2.nextDir = msg.dir;
+      }
+      break;
+  }
+}
+
+function guestLeft(peerId) {
+  delete guestConns[peerId];
+  const p = playerByPeer(peerId);
+  if (!p) return;
+
+  if (gamePhase === 'lobby') {
+    delete players[p.id];
+    broadcastLobby(); // re-renders lobby and updates btn-launch
+  } else if (gamePhase === 'playing') {
+    p.alive = false;
+    // Check if game should end (inline, no separate function needed)
+    const stillAlive = Object.values(players).filter(q => q.alive);
+    const total = Object.keys(players).length;
+    if (stillAlive.length <= (total > 1 ? 1 : 0)) {
+      clearInterval(gameLoop); gameLoop = null;
+      gamePhase = 'over';
+      const winner = stillAlive[0] || null;
+      const scores = Object.values(players).map(q => ({id:q.id,name:q.name,color:q.color,score:q.score||0}));
+      const overMsg = {
+        t:'gameOver',
+        winner: winner ? {id:winner.id,name:winner.name,color:winner.color} : null,
+        scores
+      };
+      setTimeout(() => { broadcastAll(overMsg); endGame(overMsg.winner, overMsg.scores); }, 400);
+    }
+  }
+  // If over or countdown, just clean up — player already removed from guestConns
+}
+
+function broadcastAll(msg) {
+  Object.values(guestConns).forEach(c => {
+    try { c.send(msg); } catch(e){}
+  });
+}
+
+function broadcastLobby() {
+  broadcastAll({ t:'lobby', cfg: gameCfg, lobby: getLobbySnapshot() });
+  renderLobby();
+}
+
+// ═══════════════════════════════════════════════════════
+//  JOIN (GUEST)
+// ═══════════════════════════════════════════════════════
+function joinRoom() {
+  const name = document.getElementById('join-name').value.trim();
+  const code = document.getElementById('join-code').value.trim().toUpperCase().replace(/\s+/g,'');
+  if (!name) { document.getElementById('join-err').textContent='Entrez votre pseudo'; return; }
+  if (!code) { document.getElementById('join-err').textContent='Entrez le code'; return; }
+
+  document.getElementById('join-err').textContent = '';
+  show('s-waiting');
+  document.getElementById('waiting-msg').textContent = 'Connexion à ' + code + '…';
+
+  amHost = false;
+  roomCode = code;
+
+  // Destroy current peer and re-init with a short guest ID before connecting
+  // (avoids UUID being used as room code confusion)
+  const guestId = makeShortCode() + '-G';
+
+  function doConnect() {
+    myConn = peer.connect(roomCode, {
+      reliable: true,
+      serialization: 'json',
+      metadata: { name },  // send name early so host can display it
+    });
+
+    let opened = false;
+    const timeout = setTimeout(() => {
+      if (!opened) {
+        document.getElementById('join-err').textContent =
+          'Timeout — hôte injoignable. Essayez de recharger les deux navigateurs et réessayez.';
+        show('s-join');
+      }
+    }, 15000); // 15s — Firefox ICE negotiation can be slow
+
+    myConn.on('open', () => {
+      opened = true;
+      clearTimeout(timeout);
+      document.getElementById('waiting-msg').textContent = 'Connecté ! En attente…';
+      myConn.send({ t:'join', name });
+    });
+
+    myConn.on('data', msg => handleGuestMsg(msg));
+
+    myConn.on('close', () => {
+      document.getElementById('conn-pill').textContent = '● DÉCONNECTÉ';
+      document.getElementById('conn-pill').className = 'conn-pill err';
+      const mobileP = document.getElementById('conn-pill-mobile');
+      if (mobileP) { mobileP.textContent = '●'; mobileP.className = 'conn-pill err'; }
+    });
+    myConn.on('error', err => {
+      clearTimeout(timeout);
+      console.error('Connection error:', err);
+      let msg = 'Erreur de connexion: ' + err.type;
+      if (err.type === 'negotiation-failed' || err.type === 'connection-failed') {
+        msg = 'Négociation échouée — rechargez les deux pages et réessayez. (Firefox: autorisez les connexions P2P dans about:config)';
+      }
+      document.getElementById('join-err').textContent = msg;
+      show('s-join');
+    });
+  }
+
+  doConnect();
+}
+
+function handleGuestMsg(msg) {
+  switch(msg.t) {
+    case 'reject':
+      show('s-join');
+      document.getElementById('join-err').textContent = msg.reason;
+      break;
+
+    case 'welcome':
+      mySlot = msg.slot;
+      gameCfg = msg.cfg;
+      players = {};
+      msg.lobby.forEach(p => players[p.id] = p);
+      show('s-waiting');
+      renderWaiting();
+      break;
+
+    case 'lobby':
+      gameCfg = msg.cfg;
+      players = {};
+      msg.lobby.forEach(p => players[p.id] = p);
+      renderWaiting();
+      break;
+
+    case 'cfgUpdate':
+      gameCfg = msg.cfg;
+      if (msg.lobby) { players = {}; msg.lobby.forEach(p => players[p.id] = p); }
+      renderWaiting();
+      break;
+
+    case 'kicked':
+      show('s-home');
+      break;
+
+    case 'countdown':
+      showCountdown(msg.n);
+      break;
+
+    case 'gameStart':
+      gameCfg = msg.cfg;
+      applyGridCfg();
+      gamePhase = 'playing';
+      players = {};
+      msg.players.forEach(p => players[p.id] = p);
+      apples = msg.apples || [];
+      // Re-confirm mySlot by matching our own peerId
+      if (!amHost) {
+        const me = Object.values(players).find(p => p.peerId === myId);
+        if (me) mySlot = me.id;
+        else console.warn('[gameStart] could not find self, mySlot=', mySlot, 'myId=', myId);
+      }
+      startGameDisplay();
+      break;
+
+    case 'gameState':
+      msg.players.forEach(p => players[p.id] = p);
+      apples = msg.apples;
+      renderScoreboard();
+      drawGame();
+      break;
+
+    case 'gameOver':
+      gamePhase = 'over';
+      endGame(msg.winner, msg.scores);
+      break;
+
+    case 'restart':
+      gamePhase = 'lobby';
+      gameCfg = msg.cfg;
+      players = {};
+      msg.lobby.forEach(p => players[p.id] = p);
+      show('s-waiting');
+      renderWaiting();
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  LOBBY RENDER
+// ═══════════════════════════════════════════════════════
+function getLobbySnapshot() {
+  return Object.values(players).map(p => ({
+    id:p.id, name:p.name, color:p.color, isHost: p.id===0
+  }));
+}
+
+function renderLobby() {
+  const list = document.getElementById('lobby-plist');
+  list.innerHTML = '';
+  for (let i = 0; i < gameCfg.playerCount; i++) {
+    const p = players[i];
+    const row = document.createElement('div');
+    row.className = 'prow';
+    if (p) {
+      const badge = p.id === 0 ? '<span class="pbadge">HÔTE</span>'
+                  : p.isLocal  ? '<span class="pbadge" style="color:var(--c3);border-color:rgba(170,255,0,.3)">LOCAL</span>'
+                  : '';
+      const you = p.id === mySlot ? ' <em style="opacity:.45">(vous)</em>' : '';
+      row.innerHTML = `
+        <div class="pdot" style="background:${p.color};color:${p.color}"></div>
+        <span class="pname">${esc(p.name)}${you}</span>
+        ${badge}
+      `;
+    } else {
+      row.innerHTML = `<span class="pslot">Slot ${i+1} — En attente…</span>`;
+    }
+    list.appendChild(row);
+  }
+
+  const connected = Object.keys(players).length;
+  const need = gameCfg.playerCount;
+  document.getElementById('lobby-status').textContent =
+    connected >= need ? `${connected}/${need} joueurs prêts ✓` : `En attente de ${need - connected} joueur(s)…`;
+
+  const canStart = amHost && connected >= need;
+  document.getElementById('btn-launch').disabled = !canStart;
+
+  // Show/hide local player button (host only, if there's a free slot or a local player to remove)
+  const localBox = document.getElementById('local-player-box');
+  const btnLocal = document.getElementById('btn-local-player');
+  if (amHost && localBox && btnLocal) {
+    const hasFreeSlot = nextFreeSlot() !== -1;
+    localBox.style.display = (hasFreeSlot || localSlot !== -1) ? 'block' : 'none';
+    btnLocal.textContent = localSlot !== -1
+      ? '− Retirer le joueur local'
+      : '+ Joueur local (même clavier)';
+  }
+}
+
+function renderLobbyConfig() {
+  const isH = amHost;
+
+  const lmTron  = document.getElementById('lm-tron');
+  const lmSnake = document.getElementById('lm-snake');
+  if (lmTron && lmSnake) {
+    lmTron.classList.toggle('on', gameCfg.mode === 'tron');
+    lmSnake.classList.toggle('on', gameCfg.mode === 'snake');
+    lmTron.disabled  = !isH;
+    lmSnake.disabled = !isH;
+  }
+
+  const appleBox = document.getElementById('lobby-apple-box');
+  if (appleBox) appleBox.style.display = gameCfg.mode === 'snake' ? 'block' : 'none';
+
+  const lfreq = document.getElementById('lfreq');
+  const lfv   = document.getElementById('lfv');
+  if (lfreq) { lfreq.value = gameCfg.appleFrequency; lfreq.disabled = !isH; }
+  if (lfv)   lfv.textContent = gameCfg.appleFrequency;
+
+  [2,3,4].forEach(n => {
+    const btn = document.getElementById('lcnt-' + n);
+    if (btn) { btn.classList.toggle('on', gameCfg.playerCount === n); btn.disabled = !isH; }
+  });
+
+  const lgrid = document.getElementById('lgrid');
+  const lgv   = document.getElementById('lgv');
+  if (lgrid) { lgrid.value = gameCfg.gridSize || 40; lgrid.disabled = !isH; }
+  if (lgv)   lgv.textContent = gameCfg.gridSize || 40;
+
+  const lspeed = document.getElementById('lspeed');
+  const lsv    = document.getElementById('lsv');
+  if (lspeed) { lspeed.value = gameCfg.speedLevel || 3; lspeed.disabled = !isH; }
+  if (lsv)    lsv.textContent = gameCfg.speedLevel || 3;
+}
+
+function toggleLocalPlayer() {
+  if (!amHost) return;
+  if (localSlot !== -1) {
+    // Remove local player
+    delete players[localSlot];
+    localSlot = -1;
+  } else {
+    // Add local player in next free slot
+    const slot = nextFreeSlot();
+    if (slot === -1) return;
+    players[slot] = makePlayer(slot, 'local', 'Joueur local');
+    players[slot].isLocal = true;
+    localSlot = slot;
+  }
+  broadcastLobby();
+  renderLobby();
+}
+
+function setLobbyMode(m) {
+  if (!amHost) return;
+  gameCfg.mode = m;
+  broadcastAll({ t:'cfgUpdate', cfg: gameCfg });
+  renderLobbyConfig();
+  renderLobby();
+}
+
+function setLobbyFreq(v) {
+  if (!amHost) return;
+  gameCfg.appleFrequency = parseInt(v);
+  document.getElementById('lfv').textContent = v;
+  broadcastAll({ t:'cfgUpdate', cfg: gameCfg });
+}
+
+// Speed level → ms per tick mapping
+const SPEED_MS = { 1:220, 2:160, 3:120, 4:80, 5:50 };
+
+function setLobbyGrid(v) {
+  if (!amHost) return;
+  gameCfg.gridSize = parseInt(v);
+  document.getElementById('lgv').textContent = v;
+  broadcastAll({ t:'cfgUpdate', cfg: gameCfg });
+}
+
+function setLobbySpeed(v) {
+  if (!amHost) return;
+  const level = parseInt(v);
+  gameCfg.speed = SPEED_MS[level] || 120;
+  gameCfg.speedLevel = level; // keep for UI display
+  document.getElementById('lsv').textContent = v;
+  broadcastAll({ t:'cfgUpdate', cfg: gameCfg });
+}
+
+function setLobbyCount(n) {
+  if (!amHost) return;
+  // If reducing count, remove excess players (keep host + lowest slots)
+  const currentSlots = Object.keys(players).map(Number).sort((a,b)=>a-b);
+  currentSlots.forEach(slot => {
+    if (slot >= n) {
+      // kick that slot
+      const p = players[slot];
+      if (p && p.peerId !== myId) {
+        const conn = guestConns[p.peerId];
+        if (conn) { try { conn.send({ t:'kicked' }); conn.close(); } catch(e){} }
+        delete guestConns[p.peerId];
+      }
+      delete players[slot];
+    }
+  });
+  gameCfg.playerCount = n;
+  broadcastAll({ t:'cfgUpdate', cfg: gameCfg, lobby: getLobbySnapshot() });
+  renderLobbyConfig();
+  renderLobby();
+}
+
+function renderWaiting() {
+  document.getElementById('waiting-msg').textContent = 'En attente du lancement par l\'hôte…';
+  const list = document.getElementById('waiting-plist');
+  list.innerHTML = '';
+  for (let i = 0; i < gameCfg.playerCount; i++) {
+    const p = players[i];
+    const row = document.createElement('div');
+    row.className = 'prow';
+    row.style.minWidth = '260px';
+    if (p) {
+      row.innerHTML = `
+        <div class="pdot" style="background:${p.color};color:${p.color}"></div>
+        <span class="pname">${esc(p.name)}${p.id===mySlot?' <em style="opacity:.45">(vous)</em>':''}</span>
+        ${p.id===0?'<span class="pbadge">HÔTE</span>':''}
+      `;
+    } else {
+      row.innerHTML = `<span class="pslot">Slot ${i+1} — En attente…</span>`;
+    }
+    list.appendChild(row);
+  }
+  document.getElementById('waiting-status').textContent =
+    `${Object.keys(players).length}/${gameCfg.playerCount} joueur(s) connecté(s)`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME LAUNCH (HOST)
+// ═══════════════════════════════════════════════════════
+let countdownTimer = null;
+
+function launchGame() {
+  if (!amHost) return;
+  if (gamePhase === 'playing' || gamePhase === 'countdown') return;
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  const connected = Object.keys(players).length;
+  if (connected < gameCfg.playerCount) return;
+
+  gamePhase = 'countdown';
+  document.getElementById('btn-launch').disabled = true;
+  let n = 3;
+
+  broadcastAll({ t:'countdown', n });
+  showCountdown(n);
+
+  countdownTimer = setInterval(() => {
+    n--;
+    if (n > 0) {
+      broadcastAll({ t:'countdown', n });
+      showCountdown(n);
+    } else {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      broadcastAll({ t:'countdown', n: 0 });
+      showCountdown(0);
+      setTimeout(actuallyStartGame, 600);
+    }
+  }, 1000);
+}
+
+function actuallyStartGame() {
+  // Stop any previous game loop just in case
+  if (gameLoop) { clearInterval(gameLoop); gameLoop = null; }
+
+  applyGridCfg();
+  gamePhase = 'playing';
+  apples = [];
+
+  const spawns = getSpawns();
+  Object.values(players).forEach(p => {
+    const s = spawns[p.id % 4];
+    p.x = s.x; p.y = s.y; p.dir = s.dir; p.nextDir = s.dir;
+    p.trail = [{x:s.x, y:s.y}];
+    p.alive = true; p.score = 0;
+    p.trailLen = gameCfg.mode === 'snake' ? 3 : 99999;
+  });
+
+  const startMsg = {
+    t:'gameStart', cfg: gameCfg,
+    players: Object.values(players).map(p => ({...p})),
+    apples: []
+  };
+  broadcastAll(startMsg);
+  startGameDisplay();
+
+  gameLoop = setInterval(gameTick, TICK_MS);
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME TICK (HOST ONLY)
+// ═══════════════════════════════════════════════════════
+function gameTick() {
+  // Spawn apples (snake mode)
+  if (gameCfg.mode === 'snake') {
+    const freq = gameCfg.appleFrequency;
+    if (Math.random() < freq / 10) spawnApple();
+  }
+
+  const alive = Object.values(players).filter(p => p.alive);
+
+  // Apply pending direction changes
+  alive.forEach(p => {
+    if (p.nextDir && OPP[p.nextDir] !== p.dir) p.dir = p.nextDir;
+  });
+
+  // Compute new positions
+  const npos = {};
+  alive.forEach(p => {
+    const d = DIRS[p.dir];
+    npos[p.id] = { x: p.x + d.x, y: p.y + d.y };
+  });
+
+  const dying = new Set();
+
+  // Wall + trail collisions
+  alive.forEach(p => {
+    const {x, y} = npos[p.id];
+    if (x<0||x>=GRID||y<0||y>=GRID) { dying.add(p.id); return; }
+    Object.values(players).forEach(other => {
+      const trail = (gameCfg.mode==='snake' && other.trail.length > 1)
+        ? other.trail.slice(0, -1) : other.trail;
+      trail.forEach(t => { if (t.x===x && t.y===y) dying.add(p.id); });
+    });
+  });
+
+  // Head-to-head
+  alive.forEach(p => alive.forEach(q => {
+    if (p.id !== q.id &&
+        npos[p.id].x === npos[q.id].x &&
+        npos[p.id].y === npos[q.id].y) {
+      dying.add(p.id); dying.add(q.id);
+    }
+  }));
+
+  // Apply moves
+  alive.forEach(p => {
+    if (dying.has(p.id)) { p.alive = false; return; }
+    p.x = npos[p.id].x; p.y = npos[p.id].y;
+
+    if (gameCfg.mode === 'tron') {
+      p.trail.push({x:p.x, y:p.y});
+    } else {
+      let ate = false;
+      for (let i = apples.length-1; i>=0; i--) {
+        if (apples[i].x===p.x && apples[i].y===p.y) {
+          apples.splice(i,1); p.trailLen++; p.score++; ate=true; break;
+        }
+      }
+      p.trail.push({x:p.x, y:p.y});
+      if (p.trail.length > p.trailLen) p.trail.shift();
+    }
+  });
+
+  // Broadcast state
+  const stateMsg = {
+    t: 'gameState',
+    players: Object.values(players).map(p => ({
+      id: p.id, x: p.x, y: p.y, dir: p.dir,
+      alive: p.alive, score: p.score,
+      trail: p.trail.slice(),
+      color: p.color, name: p.name,
+    })),
+    apples: apples.slice()
+  };
+  broadcastAll(stateMsg);
+
+  // Render locally (host also plays)
+  renderScoreboard();
+  drawGame();
+
+  // Check end — stop loop IMMEDIATELY
+  const stillAlive = Object.values(players).filter(p => p.alive);
+  const total = Object.keys(players).length;
+  if (stillAlive.length <= (total > 1 ? 1 : 0)) {
+    clearInterval(gameLoop);
+    gameLoop = null;
+    gamePhase = 'over';
+    const winner = stillAlive[0] || null;
+    const scores = Object.values(players).map(p => ({id:p.id, name:p.name, color:p.color, score:p.score||0}));
+    setTimeout(() => {
+      const overMsg = { t:'gameOver',
+        winner: winner ? {id:winner.id, name:winner.name, color:winner.color} : null,
+        scores };
+      broadcastAll(overMsg);
+      endGame(overMsg.winner, overMsg.scores);
+    }, 400);
+  }
+}
+
+function spawnApple() {
+  const occ = new Set();
+  Object.values(players).forEach(p => p.trail.forEach(t => occ.add(`${t.x},${t.y}`)));
+  apples.forEach(a => occ.add(`${a.x},${a.y}`));
+  for (let att=0; att<200; att++) {
+    const x=Math.floor(Math.random()*GRID), y=Math.floor(Math.random()*GRID);
+    if (!occ.has(`${x},${y}`)) { apples.push({x,y}); return; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME DISPLAY
+// ═══════════════════════════════════════════════════════
+function startGameDisplay() {
+  show('s-game');
+  // Update controls hint based on whether a local second player is present
+  const hint = document.getElementById('controls-hint');
+  if (hint) {
+    hint.innerHTML = '<div>P1 <span class="k">↑</span><span class="k">↓</span><span class="k">←</span><span class="k">→</span></div>'
+      + (localSlot !== -1 ? '<div style="margin-top:4px">P2 <span class="k">Z</span><span class="k">S</span><span class="k">Q</span><span class="k">D</span></div>' : '');
+  }
+  renderScoreboard();
+  drawGame();
+}
+
+function drawGame() {
+  ctx.clearRect(0,0,CSIZE,CSIZE);
+  ctx.fillStyle = '#06090c';
+  ctx.fillRect(0,0,CSIZE,CSIZE);
+
+  const C = CELL_PX; // shorthand
+
+  // Grid lines (skip if cells too small)
+  if (C >= 4) {
+    ctx.strokeStyle = 'rgba(0,255,204,0.07)';
+    ctx.lineWidth = 0.5;
+    for (let i=0;i<=GRID;i++) {
+      ctx.beginPath(); ctx.moveTo(i*C,0); ctx.lineTo(i*C,CSIZE); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i*C); ctx.lineTo(CSIZE,i*C); ctx.stroke();
+    }
+  }
+
+  // Apples
+  const aR = Math.max(2, C/2 - 1.5);
+  apples.forEach(a => {
+    ctx.save();
+    ctx.shadowColor='#ff4455'; ctx.shadowBlur=10;
+    ctx.fillStyle='#ff3344';
+    ctx.beginPath();
+    ctx.arc(a.x*C + C/2, a.y*C + C/2, aR, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Players
+  const gap = Math.max(0.5, C * 0.08);
+  Object.values(players).forEach(p => {
+    if (!p.trail || p.trail.length===0) return;
+    ctx.save();
+    if (!p.alive) ctx.globalAlpha = 0.25;
+
+    p.trail.forEach((t, i) => {
+      const isHead = i === p.trail.length - 1;
+      const ratio = p.trail.length > 1 ? i / (p.trail.length - 1) : 1;
+      const alpha = gameCfg.mode==='snake' ? ratio : Math.max(0.25, ratio);
+
+      ctx.globalAlpha = (p.alive ? 1 : 0.25) * alpha;
+      ctx.shadowBlur = isHead && p.alive ? 14 : 3;
+      ctx.shadowColor = p.color;
+
+      if (isHead && p.alive) {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 18;
+      } else {
+        ctx.fillStyle = p.color;
+      }
+      ctx.fillRect(t.x*C + gap, t.y*C + gap, C - gap*2, C - gap*2);
+    });
+    ctx.restore();
+  });
+}
+
+function renderScoreboard() {
+  ['scoreboard', 'scoreboard-mobile'].forEach(id => {
+    const sb = document.getElementById(id);
+    if (!sb) return;
+    sb.innerHTML = '';
+    Object.values(players).forEach(p => {
+      const r = document.createElement('div');
+      r.className = 'srow ' + (p.alive ? 'alive' : 'dead');
+      r.style.setProperty('--pc', p.color);
+      r.innerHTML = `
+        <div class="pdot" style="background:${p.color};color:${p.color}"></div>
+        <span class="sname">${esc(p.name)}</span>
+        ${gameCfg.mode === 'snake' ? `<span class="sscore">${p.score || 0}</span>` : ''}
+        ${!p.alive ? '<span>💀</span>' : ''}
+      `;
+      sb.appendChild(r);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME OVER
+// ═══════════════════════════════════════════════════════
+function endGame(winner, scores) {
+  show('s-gameover');
+  if (winner) {
+    document.getElementById('res-label').textContent = 'Vainqueur';
+    document.getElementById('res-name').style.color = winner.color;
+    document.getElementById('res-name').style.textShadow = `0 0 30px ${winner.color}`;
+    document.getElementById('res-name').textContent = winner.name;
+  } else {
+    document.getElementById('res-label').textContent = '';
+    document.getElementById('res-name').style.color = '#888';
+    document.getElementById('res-name').textContent = 'ÉGALITÉ';
+  }
+
+  const fs = document.getElementById('fscores');
+  fs.innerHTML = '';
+  if (scores) scores.sort((a,b)=>b.score-a.score).forEach(p => {
+    const r = document.createElement('div');
+    r.className = 'frow';
+    r.innerHTML = `
+      <div class="pdot" style="background:${p.color};color:${p.color}"></div>
+      <span style="flex:1">${esc(p.name)}</span>
+      ${gameCfg.mode==='snake'?`<span style="color:var(--c1)">${p.score} 🍎</span>`:''}
+    `;
+    fs.appendChild(r);
+  });
+
+  document.getElementById('btn-replay').style.display = amHost ? 'inline-block' : 'none';
+}
+
+function sendRestart() {
+  if (!amHost) return;
+
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  if (gameLoop)       { clearInterval(gameLoop);       gameLoop = null; }
+  hideOverlay();
+
+  gamePhase = 'lobby';
+
+  // Reset all players except local ones — re-add local player if it existed
+  const hadLocal = localSlot !== -1;
+  Object.values(players).forEach(p => { p.alive=false; p.trail=[]; p.score=0; });
+  apples = [];
+
+  // Re-add local player in its slot if it was there
+  if (hadLocal) {
+    const name = players[localSlot]?.name || 'Joueur local';
+    players[localSlot] = makePlayer(localSlot, 'local', name);
+    players[localSlot].isLocal = true;
+  }
+
+  const msg = { t:'restart', cfg:gameCfg, lobby: getLobbySnapshot() };
+  broadcastAll(msg);
+  show('s-lobby');
+  renderLobby();
+  renderLobbyConfig();
+}
+
+// ═══════════════════════════════════════════════════════
+//  KEYBOARD
+// ═══════════════════════════════════════════════════════
+const KEY_TO_DIR = {
+  ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right',
+  z:'up', Z:'up', s:'down', S:'down', q:'left', Q:'left', d:'right', D:'right',
+};
+const ARROW_KEYS = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight']);
+const ZQSD_KEYS  = new Set(['z','Z','s','S','q','Q','d','D']);
+
+document.addEventListener('keydown', e => {
+  // Never intercept keys when typing in an input or textarea
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  const dir = KEY_TO_DIR[e.key];
+  if (!dir) return;
+
+  e.preventDefault();
+
+  // Arrows = my player
+  if (ARROW_KEYS.has(e.key)) {
+    if (amHost) {
+      if (gamePhase !== 'playing') return;
+      const me = players[mySlot];
+      if (!me || !me.alive) return;
+      if (OPP[dir] !== me.dir) me.nextDir = dir;
+    } else {
+      if (myConn && myConn.open) myConn.send({ t:'input', dir });
+    }
+  }
+
+  // ZQSD = second local player on same keyboard
+  if (ZQSD_KEYS.has(e.key) && amHost && localSlot !== -1) {
+    if (gamePhase !== 'playing') return;
+    const p2 = players[localSlot];
+    if (!p2 || !p2.alive) return;
+    if (OPP[dir] !== p2.dir) p2.nextDir = dir;
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function makePlayer(slot, peerId, name) {
+  return {
+    id: slot, peerId, name,
+    color: PCOLORS[slot],
+    x:0, y:0, dir:'right', nextDir:'right',
+    trail:[], alive:false, score:0, trailLen:3,
+    isHost: slot===0,
+  };
+}
+
+function nextFreeSlot() {
+  for (let i=0; i<gameCfg.playerCount; i++) if (!players[i]) return i;
+  return -1;
+}
+
+function playerByPeer(peerId) {
+  return Object.values(players).find(p => p.peerId === peerId);
+}
+
+function showCountdown(n) {
+  const ov = document.getElementById('ov');
+  const txt = document.getElementById('ov-txt');
+  ov.classList.add('on');
+  txt.textContent = n === 0 ? 'GO !' : String(n);
+  if (n === 0) setTimeout(hideOverlay, 600);
+}
+function hideOverlay() { document.getElementById('ov').classList.remove('on'); }
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════════════
+//  D-PAD (mobile)
+// ═══════════════════════════════════════════════════════
+function dpadPress(dir) {
+  // Visual feedback
+  document.querySelectorAll('.dpad-btn').forEach(b => b.classList.remove('pressed'));
+  const btn = document.getElementById('dbtn-' + dir);
+  if (btn) btn.classList.add('pressed');
+
+  // Send input same as keyboard
+  if (amHost) {
+    if (gamePhase !== 'playing') return;
+    const me = players[mySlot];
+    if (!me || !me.alive) return;
+    if (OPP[dir] !== me.dir) me.nextDir = dir;
+  } else {
+    if (myConn && myConn.open) myConn.send({ t:'input', dir });
+  }
+}
+
+function dpadRelease() {
+  document.querySelectorAll('.dpad-btn').forEach(b => b.classList.remove('pressed'));
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════
+initPeer();
+</script>
+</body>
+</html>

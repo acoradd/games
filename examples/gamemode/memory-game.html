@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu de Mémoire - 2 à 4 Joueurs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .setup-screen {
+            display: block;
+        }
+
+        .game-screen {
+            display: none;
+        }
+
+        .setup-content {
+            text-align: center;
+        }
+
+        .player-setup {
+            margin: 30px 0;
+        }
+
+        .player-setup label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        .player-setup input {
+            width: 100%;
+            max-width: 400px;
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .player-count-selector {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .player-count-btn {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .player-count-btn.active {
+            background: #667eea;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .player-count-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .btn {
+            padding: 15px 40px;
+            font-size: 1.1em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .players-info {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            gap: 15px;
+        }
+
+        .player-card {
+            background: #f8f9fa;
+            padding: 15px 25px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 150px;
+            transition: all 0.3s;
+            border: 3px solid transparent;
+        }
+
+        .player-card.active {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+            border-color: #764ba2;
+        }
+
+        .player-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .player-score {
+            font-size: 1.5em;
+            margin-top: 5px;
+        }
+
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 30px auto;
+            max-width: 700px;
+        }
+
+        .card {
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            min-height: 80px;
+        }
+
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card.matched {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 10px;
+            font-size: 3em;
+        }
+
+        .card-front {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .card-back {
+            background: white;
+            transform: rotateY(180deg);
+            border: 3px solid #667eea;
+        }
+
+        .game-controls {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .winner-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .winner-content {
+            background: white;
+            padding: 50px;
+            border-radius: 20px;
+            text-align: center;
+            animation: slideIn 0.5s;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .winner-content h2 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .winner-content p {
+            font-size: 1.5em;
+            margin: 10px 0;
+        }
+
+        .final-scores {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .final-score-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 1.2em;
+        }
+
+        @media (max-width: 600px) {
+            .game-board {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+
+            .card-back {
+                font-size: 2em;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Jeu de Mémoire</h1>
+        
+        <!-- Écran de configuration -->
+        <div class="setup-screen" id="setupScreen">
+            <div class="setup-content">
+                <h2>Nombre de joueurs</h2>
+                <div class="player-count-selector">
+                    <button class="player-count-btn active" onclick="setPlayerCount(2)">
+                        2 Joueurs<br><small style="font-size:0.8em">16 cartes</small>
+                    </button>
+                    <button class="player-count-btn" onclick="setPlayerCount(3)">
+                        3 Joueurs<br><small style="font-size:0.8em">24 cartes</small>
+                    </button>
+                    <button class="player-count-btn" onclick="setPlayerCount(4)">
+                        4 Joueurs<br><small style="font-size:0.8em">30 cartes</small>
+                    </button>
+                </div>
+
+                <div class="player-setup" id="playerInputs">
+                    <label>Nom des joueurs :</label>
+                    <input type="text" id="player1" placeholder="Joueur 1" value="Joueur 1">
+                    <input type="text" id="player2" placeholder="Joueur 2" value="Joueur 2">
+                    <input type="text" id="player3" placeholder="Joueur 3" value="Joueur 3" style="display:none;">
+                    <input type="text" id="player4" placeholder="Joueur 4" value="Joueur 4" style="display:none;">
+                </div>
+
+                <button class="btn" onclick="startGame()">Commencer la partie</button>
+            </div>
+        </div>
+
+        <!-- Écran de jeu -->
+        <div class="game-screen" id="gameScreen">
+            <div class="players-info" id="playersInfo"></div>
+            
+            <div class="game-board" id="gameBoard"></div>
+
+            <div class="game-controls">
+                <button class="btn" onclick="resetGame()">Nouvelle partie</button>
+                <button class="btn" onclick="backToSetup()">Changer joueurs</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de fin de jeu -->
+    <div class="winner-modal" id="winnerModal">
+        <div class="winner-content">
+            <h2>🏆 Partie terminée !</h2>
+            <div id="winnerText"></div>
+            <div class="final-scores" id="finalScores"></div>
+            <button class="btn" onclick="closeModal()">Fermer</button>
+            <button class="btn" onclick="playAgain()">Rejouer</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration du jeu
+        let playerCount = 2;
+        let players = [];
+        let currentPlayerIndex = 0;
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let canFlip = true;
+        let totalPairs = 0; // Nombre total de paires dans la partie
+
+        // Déterminer le nombre de paires en fonction du nombre de joueurs
+        function getPairsCount(numPlayers) {
+            const pairsMap = {
+                2: 8,   // 16 cartes (4x4)
+                3: 12,  // 24 cartes (4x6)
+                4: 15   // 30 cartes (5x6)
+            };
+            return pairsMap[numPlayers] || 8;
+        }
+
+        // Déterminer la disposition de la grille
+        function getGridColumns(numPlayers) {
+            const columnsMap = {
+                2: 4,   // 4 colonnes
+                3: 4,   // 4 colonnes
+                4: 5    // 5 colonnes
+            };
+            return columnsMap[numPlayers] || 4;
+        }
+
+        // Symboles pour les cartes (émojis)
+        const symbols = ['🎮', '🎲', '🎯', '🎪', '🎨', '🎭', '🎸', '⚽', 
+                        '🏀', '🎾', '🏐', '🎳', '🏆', '🎖️', '🎗️', '🌟',
+                        '🚀', '🛸', '🌈', '🎪', '🎡', '🎢', '🎠', '🎰',
+                        '🎺', '🎷', '🥁', '🎹', '🎻', '🎬', '🎤', '🎧'];
+
+        // Configuration du nombre de joueurs
+        function setPlayerCount(count) {
+            playerCount = count;
+            document.querySelectorAll('.player-count-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Afficher/cacher les champs de nom
+            for (let i = 1; i <= 4; i++) {
+                const input = document.getElementById(`player${i}`);
+                input.style.display = i <= count ? 'block' : 'none';
+            }
+        }
+
+        // Démarrer le jeu
+        function startGame() {
+            players = [];
+            for (let i = 1; i <= playerCount; i++) {
+                const name = document.getElementById(`player${i}`).value.trim() || `Joueur ${i}`;
+                players.push({
+                    name: name,
+                    score: 0
+                });
+            }
+
+            currentPlayerIndex = 0;
+            matchedPairs = 0;
+            
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+
+            initializeGame();
+        }
+
+        // Initialiser le plateau de jeu
+        function initializeGame() {
+            const board = document.getElementById('gameBoard');
+            board.innerHTML = '';
+            
+            // Déterminer le nombre de paires et la disposition
+            totalPairs = getPairsCount(playerCount);
+            const columns = getGridColumns(playerCount);
+            
+            // Ajuster la grille CSS
+            board.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+            
+            // Créer les paires de cartes
+            const cardSymbols = symbols.slice(0, totalPairs).concat(symbols.slice(0, totalPairs));
+            shuffleArray(cardSymbols);
+
+            // Créer les cartes
+            cardSymbols.forEach((symbol, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.symbol = symbol;
+                card.dataset.index = index;
+                
+                card.innerHTML = `
+                    <div class="card-front">?</div>
+                    <div class="card-back">${symbol}</div>
+                `;
+                
+                card.addEventListener('click', () => flipCard(card));
+                board.appendChild(card);
+            });
+
+            updatePlayersDisplay();
+        }
+
+        // Mélanger un tableau
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // Retourner une carte
+        function flipCard(card) {
+            if (!canFlip || card.classList.contains('flipped') || card.classList.contains('matched')) {
+                return;
+            }
+
+            card.classList.add('flipped');
+            flippedCards.push(card);
+
+            if (flippedCards.length === 2) {
+                canFlip = false;
+                setTimeout(checkMatch, 1000);
+            }
+        }
+
+        // Vérifier si les cartes correspondent
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            const symbol1 = card1.dataset.symbol;
+            const symbol2 = card2.dataset.symbol;
+
+            if (symbol1 === symbol2) {
+                // Paire trouvée !
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                players[currentPlayerIndex].score++;
+                matchedPairs++;
+
+                if (matchedPairs === totalPairs) {
+                    setTimeout(endGame, 500);
+                }
+            } else {
+                // Pas de correspondance
+                card1.classList.remove('flipped');
+                card2.classList.remove('flipped');
+                nextPlayer();
+            }
+
+            flippedCards = [];
+            canFlip = true;
+            updatePlayersDisplay();
+        }
+
+        // Passer au joueur suivant
+        function nextPlayer() {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+        }
+
+        // Mettre à jour l'affichage des joueurs
+        function updatePlayersDisplay() {
+            const playersInfo = document.getElementById('playersInfo');
+            playersInfo.innerHTML = '';
+
+            players.forEach((player, index) => {
+                const card = document.createElement('div');
+                card.className = 'player-card';
+                if (index === currentPlayerIndex) {
+                    card.classList.add('active');
+                }
+                
+                card.innerHTML = `
+                    <div class="player-name">${player.name}</div>
+                    <div class="player-score">⭐ ${player.score}</div>
+                `;
+                
+                playersInfo.appendChild(card);
+            });
+        }
+
+        // Fin de partie
+        function endGame() {
+            // Trouver le(s) gagnant(s)
+            const maxScore = Math.max(...players.map(p => p.score));
+            const winners = players.filter(p => p.score === maxScore);
+
+            let winnerText = '';
+            if (winners.length === 1) {
+                winnerText = `<p>🎉 ${winners[0].name} remporte la partie !</p>`;
+            } else {
+                winnerText = `<p>🎉 Égalité entre ${winners.map(w => w.name).join(' et ')} !</p>`;
+            }
+
+            document.getElementById('winnerText').innerHTML = winnerText;
+
+            // Afficher les scores finaux
+            const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+            const finalScoresHTML = sortedPlayers.map((player, index) => 
+                `<div class="final-score-item">${index + 1}. ${player.name}: ${player.score} paire${player.score > 1 ? 's' : ''}</div>`
+            ).join('');
+            
+            document.getElementById('finalScores').innerHTML = finalScoresHTML;
+            document.getElementById('winnerModal').style.display = 'flex';
+        }
+
+        // Fermer la modal
+        function closeModal() {
+            document.getElementById('winnerModal').style.display = 'none';
+        }
+
+        // Rejouer avec les mêmes joueurs
+        function playAgain() {
+            closeModal();
+            players.forEach(player => player.score = 0);
+            currentPlayerIndex = 0;
+            matchedPairs = 0;
+            flippedCards = [];
+            canFlip = true;
+            initializeGame();
+        }
+
+        // Réinitialiser complètement
+        function resetGame() {
+            playAgain();
+        }
+
+        // Retour à l'écran de configuration
+        function backToSetup() {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('setupScreen').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
