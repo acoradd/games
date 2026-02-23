@@ -109,6 +109,7 @@ export default function LobbyPage() {
     const [gameModes, setGameModes] = useState<GameMode[]>([]);
     const [chatInput, setChatInput] = useState("");
     const [copied, setCopied] = useState<"code" | "link" | null>(null);
+    const [mobileTab, setMobileTab] = useState<"jeu" | "joueurs" | "chat">("jeu");
 
     const isHost = sessionId !== "" && sessionId === hostId;
     const selectedGame = gameModes.find((g) => g.slug === selectedSlug) ?? null;
@@ -316,11 +317,28 @@ export default function LobbyPage() {
                 </div>
             </header>
 
+            {/* ── Onglets mobiles ── */}
+            <div className="lg:hidden flex border-b border-gray-800 shrink-0">
+                {(["jeu", "joueurs", "chat"] as const).map((tab) => (
+                    <button
+                        key={tab}
+                        onClick={() => setMobileTab(tab)}
+                        className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                            mobileTab === tab
+                                ? "border-b-2 border-indigo-500 text-white"
+                                : "text-gray-500 hover:text-gray-300"
+                        }`}
+                    >
+                        {tab === "joueurs" ? `Joueurs (${players.length})` : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                ))}
+            </div>
+
             {/* ── Body ── */}
             <div className="flex flex-1 min-h-0 overflow-hidden">
 
                 {/* ── Panneau gauche : sélection / info du jeu ── */}
-                <main className="flex-1 overflow-y-auto p-6 border-r border-gray-800">
+                <main className={`${mobileTab !== "jeu" ? "hidden lg:block" : "block"} flex-1 overflow-y-auto p-4 lg:p-6 lg:border-r lg:border-gray-800`}>
                     {!selectedSlug ? (
                         /* Sélection du jeu */
                         <div>
@@ -389,10 +407,10 @@ export default function LobbyPage() {
                 </main>
 
                 {/* ── Panneau droit : joueurs + chat ── */}
-                <aside className="w-80 flex flex-col border-l border-gray-800 shrink-0">
+                <aside className={`${mobileTab === "jeu" ? "hidden lg:flex" : "flex"} w-full lg:w-80 flex-col lg:border-l lg:border-gray-800 shrink-0`}>
 
                     {/* Joueurs */}
-                    <div className="p-4 border-b border-gray-800">
+                    <div className={`p-4 border-b border-gray-800 ${mobileTab === "chat" ? "hidden lg:block" : ""}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">
                             Joueurs ({players.length})
                         </p>
@@ -422,7 +440,7 @@ export default function LobbyPage() {
                     </div>
 
                     {/* Chat */}
-                    <div className="flex-1 flex flex-col min-h-0">
+                    <div className={`flex-1 flex flex-col min-h-0 ${mobileTab === "joueurs" ? "hidden lg:flex" : ""}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2">Chat</p>
 
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
@@ -471,7 +489,7 @@ export default function LobbyPage() {
             </div>
 
             {/* ── Footer actions ── */}
-            <footer className="border-t border-gray-800 px-6 py-3 flex items-center justify-between gap-3">
+            <footer className="border-t border-gray-800 px-4 lg:px-6 py-3 flex items-center justify-between gap-3 shrink-0 flex-wrap">
                 <button
                     onClick={handleReady}
                     className={`px-5 py-2 rounded-lg font-semibold transition-colors ${
