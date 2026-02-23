@@ -6,7 +6,7 @@ import type { GameMode, GameOptionsValues } from "../models/GameMode";
 import { joinLobby } from "../services/lobbyService";
 import { getStoredPlayer } from "../services/playerService";
 import { getGameModes } from "../services/gameModeService";
-import { getCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
+import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
 
 // ── Gradient et emoji par jeu ────────────────────────────────────────────────
 const SLUG_STYLE: Record<string, { gradient: string; emoji: string }> = {
@@ -95,6 +95,7 @@ export default function LobbyPage() {
 
     const roomRef = useRef<Room<LobbyState> | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const startingGameRef = useRef(false);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -178,6 +179,7 @@ export default function LobbyPage() {
                 if (cancelled) { room.leave(); return; }
 
                 roomRef.current = room;
+                setCurrentRoom(room);
                 setSessionId(room.sessionId);
 
                 // Sync initial state immediately (room from store already has state)
@@ -190,6 +192,7 @@ export default function LobbyPage() {
                 });
 
                 room.onMessage("game:start", ({ gameSlug, roomId: gRoomId }: { gameSlug: string; roomId: string }) => {
+                    startingGameRef.current = true;
                     navigate(`/game/${gameSlug}/play/${gRoomId}`);
                 });
 
@@ -210,8 +213,12 @@ export default function LobbyPage() {
         return () => {
             cancelled = true;
             if (roomRef.current) {
-                roomRef.current.leave();
-                clearCurrentRoom();
+                if (startingGameRef.current) {
+                    // Keep room alive for GamePage to pick up
+                } else {
+                    roomRef.current.leave();
+                    clearCurrentRoom();
+                }
                 roomRef.current = null;
             }
         };

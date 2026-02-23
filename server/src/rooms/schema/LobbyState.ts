@@ -16,8 +16,10 @@ export class LobbyPlayer extends Schema {
 export class LobbyState extends Schema {
     @type("string") hostId: string = "";
     @type("boolean") isStarted: boolean = false;
+    @type("string") status: string = "lobby";
     @type("string") selectedGameSlug: string = "";
     @type("string") gameOptionsJson: string = "{}";
+    @type("string") gameStateJson: string = "{}";
     @type({ map: LobbyPlayer }) players = new MapSchema<LobbyPlayer>();
     @type([ChatMessage]) chatHistory = new ArraySchema<ChatMessage>();
 }

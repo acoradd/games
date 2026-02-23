@@ -5,6 +5,28 @@ interface JoinOptions {
     username?: string;
 }
 
+// ── Memory game types (server-only) ────────────────────────────────────────
+interface MemoryCard {
+    id: number;
+    value: number;
+    isFlipped: boolean;
+    isMatched: boolean;
+}
+
+interface MemoryGameState {
+    phase: "picking1" | "picking2" | "revealing" | "ended";
+    currentTurnId: string;
+    firstFlippedIndex: number;
+    cards: MemoryCard[];
+    scores: Record<string, number>;
+}
+
+const SYMBOLS = [
+    "🎮","🎲","🎯","⚽","🏀","🎾","🏆","🚀","🌟","🎪",
+    "🎨","🎭","🎰","🎵","🎬","🌈","🍕","🦁","🐬","🌺",
+    "🎸","🏄","🚂","🎃","🦊",
+];
+
 export class LobbyRoom extends Room<{ state: LobbyState }> {
     maxClients = 8;
 
@@ -51,6 +73,47 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         console.log(`[LobbyRoom ${this.roomId}] disposed`);
     }
 
+    // ── Private helpers ─────────────────────────────────────────────────────
+    private initMemory() {
+        const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
+        const pairs = parseInt(String(options["pairs"] ?? "12"), 10);
+
+        // Build shuffled deck
+        const symbolIndices = Array.from({ length: SYMBOLS.length }, (_, i) => i);
+        const shuffled = symbolIndices.sort(() => Math.random() - 0.5).slice(0, pairs);
+        const deck = [...shuffled, ...shuffled].sort(() => Math.random() - 0.5);
+
+        const cards: MemoryCard[] = deck.map((value, id) => ({
+            id,
+            value,
+            isFlipped: false,
+            isMatched: false,
+        }));
+
+        const scores: Record<string, number> = {};
+        this.state.players.forEach((_p, sessionId) => {
+            scores[sessionId] = 0;
+        });
+
+        const playerIds = Array.from(this.state.players.keys());
+        const initialState: MemoryGameState = {
+            phase: "picking1",
+            currentTurnId: playerIds[0] ?? "",
+            firstFlippedIndex: -1,
+            cards,
+            scores,
+        };
+
+        this.state.gameStateJson = JSON.stringify(initialState);
+    }
+
+    private nextTurn(state: MemoryGameState) {
+        const playerIds = Array.from(this.state.players.keys());
+        const idx = playerIds.indexOf(state.currentTurnId);
+        state.currentTurnId = playerIds[(idx + 1) % playerIds.length] ?? state.currentTurnId;
+    }
+
+    // ── Messages ────────────────────────────────────────────────────────────
     messages = {
         ready: (client: Client) => {
             const player = this.state.players.get(client.sessionId);
@@ -91,11 +154,96 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (this.state.isStarted) return;
 
             this.state.isStarted = true;
+
+            if (this.state.selectedGameSlug === "memory") {
+                this.initMemory();
+            }
+
+            this.state.status = "game";
+
             this.broadcast("game:start", {
                 roomId: this.roomId,
                 gameSlug: this.state.selectedGameSlug,
                 options: JSON.parse(this.state.gameOptionsJson),
             });
+        },
+
+        flipCard: (client: Client, data: { index: number }) => {
+            if (this.state.status !== "game") return;
+
+            let gameState: MemoryGameState;
+            try {
+                gameState = JSON.parse(this.state.gameStateJson) as MemoryGameState;
+            } catch {
+                return;
+            }
+
+            const { phase, currentTurnId, cards } = gameState;
+
+            if (phase === "revealing" || phase === "ended") return;
+            if (client.sessionId !== currentTurnId) return;
+
+            const index = data.index;
+            if (typeof index !== "number" || index < 0 || index >= cards.length) return;
+
+            const card = cards[index];
+            if (!card || card.isFlipped || card.isMatched) return;
+
+            if (phase === "picking1") {
+                card.isFlipped = true;
+                gameState.firstFlippedIndex = index;
+                gameState.phase = "picking2";
+                this.state.gameStateJson = JSON.stringify(gameState);
+
+            } else if (phase === "picking2") {
+                card.isFlipped = true;
+
+                const firstCard = cards[gameState.firstFlippedIndex];
+                if (!firstCard) return;
+
+                if (firstCard.value === card.value) {
+                    // Match
+                    firstCard.isMatched = true;
+                    card.isMatched = true;
+                    gameState.scores[client.sessionId] = (gameState.scores[client.sessionId] ?? 0) + 1;
+
+                    const allMatched = cards.every((c) => c.isMatched);
+                    if (allMatched) {
+                        gameState.phase = "ended";
+                    } else {
+                        gameState.phase = "picking1";
+                        // Same player gets another turn on match
+                    }
+                    gameState.firstFlippedIndex = -1;
+                    this.state.gameStateJson = JSON.stringify(gameState);
+
+                } else {
+                    // No match — reveal briefly then flip back
+                    // Capture ids before mutating state
+                    const cardId = card.id;
+                    const firstCardId = firstCard.id;
+
+                    gameState.phase = "revealing";
+                    gameState.firstFlippedIndex = -1;
+                    this.state.gameStateJson = JSON.stringify(gameState);
+
+                    this.clock.setTimeout(() => {
+                        let gs: MemoryGameState;
+                        try {
+                            gs = JSON.parse(this.state.gameStateJson) as MemoryGameState;
+                        } catch {
+                            return;
+                        }
+                        const c1 = gs.cards.find((c) => c.id === cardId);
+                        const c2 = gs.cards.find((c) => c.id === firstCardId);
+                        if (c1 && !c1.isMatched) c1.isFlipped = false;
+                        if (c2 && !c2.isMatched) c2.isFlipped = false;
+                        this.nextTurn(gs);
+                        gs.phase = "picking1";
+                        this.state.gameStateJson = JSON.stringify(gs);
+                    }, 1500);
+                }
+            }
         },
     };
 }

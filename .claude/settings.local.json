@@ -12,7 +12,9 @@
       "Bash(echo CLIENT OK:*)",
       "Bash(cd /c/Programmation/aco/accoradd-games/server && npm run seed 2>&1)",
       "Bash(echo OK:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ls:*)",
+      "Bash(head:*)"
     ]
   }
 }
