@@ -15,6 +15,7 @@ export default function GamePage() {
     const roomRef = useRef<Room<LobbyState> | null>(null);
     const reconnectionTokenRef = useRef<string>("");
     const cancelledRef = useRef(false);
+    const returningToLobbyRef = useRef(false);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -68,6 +69,12 @@ export default function GamePage() {
             if (cancelledRef.current) return;
             setReconnecting(true);
             attemptReconnect(reconnectionTokenRef.current);
+        });
+
+        room.onMessage("lobby:return", () => {
+            if (cancelledRef.current) return;
+            returningToLobbyRef.current = true;
+            navigate(`/lobby/${roomId}`);
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncState]);
@@ -141,8 +148,11 @@ export default function GamePage() {
         return () => {
             cancelledRef.current = true;
             if (roomRef.current) {
-                roomRef.current.leave();
-                clearCurrentRoom();
+                if (!returningToLobbyRef.current) {
+                    roomRef.current.leave();
+                    clearCurrentRoom();
+                }
+                // if returningToLobbyRef is true: keep room alive in store for LobbyPage
                 roomRef.current = null;
             }
         };
@@ -187,7 +197,6 @@ export default function GamePage() {
                     sessionId={sessionId}
                     gameState={gameState}
                     players={players}
-                    roomId={roomId}
                 />
             ) : (
                 <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">

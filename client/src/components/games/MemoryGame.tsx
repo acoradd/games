@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, MemoryCard, MemoryGameState } from "../../models/Lobby";
@@ -14,7 +13,6 @@ interface Props {
     sessionId: string;
     gameState: MemoryGameState;
     players: LobbyPlayer[];
-    roomId: string;
 }
 
 function CardButton({
@@ -48,12 +46,12 @@ function CardButton({
     );
 }
 
-export default function MemoryGame({ room, sessionId, gameState, players, roomId }: Props) {
-    const navigate = useNavigate();
+export default function MemoryGame({ room, sessionId, gameState, players }: Props) {
     const { phase, currentTurnId, cards, scores, turnDeadline, playerNames } = gameState;
 
     const isMyTurn = sessionId === currentTurnId;
     const canInteract = isMyTurn && phase !== "revealing" && phase !== "ended";
+    const isHost = players.find((p) => p.id === sessionId)?.isHost ?? false;
 
     // ── Turn countdown ──────────────────────────────────────────────────────
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -201,12 +199,16 @@ export default function MemoryGame({ room, sessionId, gameState, players, roomId
                                 );
                             })}
                         </ul>
-                        <button
-                            onClick={() => navigate(`/lobby/${roomId}`)}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-lg transition-colors"
-                        >
-                            Retour au lobby
-                        </button>
+                        {isHost ? (
+                            <button
+                                onClick={() => room.send("returnToLobby")}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-lg transition-colors"
+                            >
+                                Retour au lobby →
+                            </button>
+                        ) : (
+                            <p className="text-gray-500 text-sm">En attente du retour au lobby…</p>
+                        )}
                     </div>
                 </div>
             )}

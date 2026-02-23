@@ -297,6 +297,27 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
         },
 
+        returnToLobby: (client: Client) => {
+            if (client.sessionId !== this.state.hostId) return;
+            if (this.state.status !== "game") return;
+            try {
+                const gs = JSON.parse(this.state.gameStateJson) as { phase?: string };
+                if (gs.phase !== "ended") return;
+            } catch { return; }
+
+            this.clearTurnTimer();
+            this.state.isStarted = false;
+            this.state.status = "lobby";
+            this.state.gameStateJson = "{}";
+            this.state.players.forEach((p) => {
+                p.isReady = false;
+                p.isEliminated = false;
+                p.isConnected = true;
+            });
+            this.broadcast("lobby:return", { roomId: this.roomId });
+            console.log(`[LobbyRoom ${this.roomId}] host returned everyone to lobby`);
+        },
+
         start: (client: Client) => {
             if (client.sessionId !== this.state.hostId) return;
             if (!this.state.selectedGameSlug) return;
