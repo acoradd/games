@@ -61,35 +61,38 @@ export default function HomePage() {
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto px-6 py-10 flex-auto overflow-y-auto">
-                <section className="mb-8">
-                    <h2 className="text-lg font-semibold text-gray-300 mb-3">Rejoindre une partie</h2>
-                    <JoinRoomForm />
-                </section>
+            <main className="flex-auto overflow-y-auto">
+                <section className="max-w-5xl mx-auto px-6 py-10 ">
+                    <section className="mb-8">
+                        <h2 className="text-lg font-semibold text-gray-300 mb-3">Rejoindre une partie</h2>
+                        <JoinRoomForm />
+                    </section>
 
-                <section>
-                    <h2 className="text-lg font-semibold text-gray-300 mb-1">Les jeux</h2>
-                    <p className="text-gray-600 text-sm mb-4">Créez un lobby et choisissez le jeu une fois à l'intérieur.</p>
+                    <section>
+                        <h2 className="text-lg font-semibold text-gray-300 mb-1">Les jeux</h2>
+                        <p className="text-gray-600 text-sm mb-4">Créez un lobby et choisissez le jeu une fois à l'intérieur.</p>
 
-                    {loadingGames && <p className="text-gray-500 text-sm">Chargement…</p>}
+                        {loadingGames && <p className="text-gray-500 text-sm">Chargement…</p>}
 
-                    {error && (
-                        <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
-                            {error}
-                        </p>
-                    )}
+                        {error && (
+                            <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
+                                {error}
+                            </p>
+                        )}
 
-                    {!loadingGames && !error && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {gameModes.map((gm) => (
-                                <GameCard
-                                    key={gm.id}
-                                    gameMode={gm}
-                                    onCreateRoom={handleCreateLobby}
-                                />
-                            ))}
-                        </div>
-                    )}
+                        {!loadingGames && !error && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {gameModes.map((gm) => (
+                                    <GameCard
+                                        key={gm.id}
+                                        gameMode={gm}
+                                        onCreateRoom={handleCreateLobby}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
                 </section>
             </main>
         </div>
