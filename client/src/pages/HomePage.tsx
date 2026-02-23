@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import type { GameMode } from "../models/GameMode";
 import { getGameModes } from "../services/gameModeService";
 import { createAnonymousPlayer, getStoredPlayer } from "../services/playerService";
@@ -14,6 +14,8 @@ export default function HomePage() {
     const [showModal, setShowModal] = useState(false);
     const [creatingPlayer, setCreatingPlayer] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
+    const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? null;
 
     useEffect(() => {
         if (!getStoredPlayer()) setShowModal(true);
@@ -28,7 +30,11 @@ export default function HomePage() {
         setCreatingPlayer(true);
         try {
             await createAnonymousPlayer(username);
-            setShowModal(false);
+            if (returnTo) {
+                navigate(returnTo);
+            } else {
+                setShowModal(false);
+            }
         } catch {
             // Keep modal open on error
         } finally {

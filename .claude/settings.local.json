@@ -14,7 +14,8 @@
       "Bash(echo OK:*)",
       "Bash(node:*)",
       "Bash(ls:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(cd /c/Programmation/aco/accoradd-games/client && ./node_modules/.bin/tsc --noEmit 2>&1)"
     ]
   }
 }

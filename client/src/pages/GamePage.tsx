@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, MemoryGameState, ChatMsg } from "../models/Lobby";
 import { joinLobby } from "../services/lobbyService";
@@ -44,6 +44,7 @@ function checkOtherTabActive(roomId: string): Promise<boolean> {
 export default function GamePage() {
     const { slug = "", roomId = "" } = useParams<{ slug: string; roomId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const roomRef = useRef<Room<LobbyState> | null>(null);
     const reconnectionTokenRef = useRef<string>("");
@@ -178,7 +179,7 @@ export default function GamePage() {
         returningToLobbyRef.current = false;
 
         if (!getStoredPlayer()) {
-            navigate("/");
+            navigate("/", { state: { returnTo: location.pathname } });
             return;
         }
 

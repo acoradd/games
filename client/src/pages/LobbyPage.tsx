@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, ChatMsg, LobbyState } from "../models/Lobby";
 import type { GameMode, GameOptionsValues } from "../models/GameMode";
@@ -92,6 +92,7 @@ function GameOptions({
 export default function LobbyPage() {
     const { roomId = "" } = useParams<{ roomId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const roomRef = useRef<Room<LobbyState> | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -168,7 +169,7 @@ export default function LobbyPage() {
         let cancelled = false;
 
         if (!getStoredPlayer()) {
-            navigate("/");
+            navigate("/", { state: { returnTo: location.pathname } });
             return;
         }
 
