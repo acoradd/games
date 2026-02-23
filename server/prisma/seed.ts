@@ -11,6 +11,10 @@ async function main() {
             minPlayers: 2,
             maxPlayers: 4,
             isActive: true,
+            options: {
+                speed:   { type: "range",  min: 1, max: 5, default: 3,        label: "Vitesse" },
+                mapSize: { type: "select", options: ["Petite", "Moyenne", "Grande"], default: "Moyenne", label: "Carte" },
+            },
         },
         {
             name: "Bomberman",
@@ -19,6 +23,11 @@ async function main() {
             minPlayers: 2,
             maxPlayers: 4,
             isActive: true,
+            options: {
+                lives:     { type: "range", min: 1, max: 5, default: 3, label: "Vies" },
+                bombCount: { type: "range", min: 1, max: 3, default: 1, label: "Bombes initiales" },
+                powerUps:  { type: "toggle", default: true,              label: "Power-ups" },
+            },
         },
         {
             name: "Memory",
@@ -27,6 +36,9 @@ async function main() {
             minPlayers: 2,
             maxPlayers: 4,
             isActive: true,
+            options: {
+                pairs: { type: "select", options: ["8", "12", "16", "24"], default: "12", label: "Nombre de paires" },
+            },
         },
         {
             name: "Motus",
@@ -35,6 +47,10 @@ async function main() {
             minPlayers: 2,
             maxPlayers: 8,
             isActive: true,
+            options: {
+                wordLength: { type: "range", min: 5, max: 8, default: 6,  label: "Longueur du mot" },
+                timeLimit:  { type: "range", min: 30, max: 120, default: 60, step: 10, label: "Temps (s)" },
+            },
         },
     ];
 

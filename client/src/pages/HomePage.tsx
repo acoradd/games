@@ -16,10 +16,7 @@ export default function HomePage() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const stored = getStoredPlayer();
-        if (!stored) {
-            setShowModal(true);
-        }
+        if (!getStoredPlayer()) setShowModal(true);
 
         getGameModes()
             .then(setGameModes)
@@ -39,8 +36,8 @@ export default function HomePage() {
         }
     }
 
-    function handleCreateRoom(slug: string) {
-        navigate(`/game/${slug}/new`);
+    function handleCreateLobby() {
+        navigate("/lobby/new");
     }
 
     return (
@@ -51,11 +48,17 @@ export default function HomePage() {
 
             <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
                 <h1 className="text-2xl font-bold tracking-tight">AccorAdd Games</h1>
-                {getStoredPlayer() && (
-                    <span className="text-gray-400 text-sm">
-                        {getStoredPlayer()?.player.username}
-                    </span>
-                )}
+                <div className="flex items-center gap-4">
+                    {getStoredPlayer() && (
+                        <span className="text-gray-400 text-sm">{getStoredPlayer()?.player.username}</span>
+                    )}
+                    <button
+                        onClick={handleCreateLobby}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+                    >
+                        + Créer un lobby
+                    </button>
+                </div>
             </header>
 
             <main className="max-w-5xl mx-auto px-6 py-10">
@@ -65,11 +68,10 @@ export default function HomePage() {
                 </section>
 
                 <section>
-                    <h2 className="text-lg font-semibold text-gray-300 mb-4">Choisir un jeu</h2>
+                    <h2 className="text-lg font-semibold text-gray-300 mb-1">Les jeux</h2>
+                    <p className="text-gray-600 text-sm mb-4">Créez un lobby et choisissez le jeu une fois à l'intérieur.</p>
 
-                    {loadingGames && (
-                        <p className="text-gray-500 text-sm">Chargement…</p>
-                    )}
+                    {loadingGames && <p className="text-gray-500 text-sm">Chargement…</p>}
 
                     {error && (
                         <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
@@ -83,7 +85,7 @@ export default function HomePage() {
                                 <GameCard
                                     key={gm.id}
                                     gameMode={gm}
-                                    onCreateRoom={handleCreateRoom}
+                                    onCreateRoom={handleCreateLobby}
                                 />
                             ))}
                         </div>

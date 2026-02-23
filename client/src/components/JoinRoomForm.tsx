@@ -7,9 +7,9 @@ export default function JoinRoomForm() {
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        const trimmed = code.trim().toUpperCase();
+        const trimmed = code.trim();
         if (trimmed) {
-            navigate(`/join/${trimmed}`);
+            navigate(`/lobby/${trimmed}`);
         }
     }
 

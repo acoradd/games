@@ -1,13 +1,25 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import HomePage from "./pages/HomePage";
+import CreateLobbyPage from "./pages/CreateLobbyPage";
+import LobbyPage from "./pages/LobbyPage";
+import JoinLobbyPage from "./pages/JoinLobbyPage";
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/join/:roomCode" element={<div className="text-white p-8">Rejoindre la room — à implémenter</div>} />
-                <Route path="/game/:slug/new" element={<div className="text-white p-8">Créer une partie — à implémenter</div>} />
+                <Route path="/lobby/new" element={<CreateLobbyPage />} />
+                <Route path="/lobby/:roomId" element={<LobbyPage />} />
+                <Route path="/join/:roomCode" element={<JoinLobbyPage />} />
+                <Route
+                    path="/game/:slug/play/:roomId"
+                    element={
+                        <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+                            <p className="text-gray-400">Jeu en cours — Plan 3</p>
+                        </div>
+                    }
+                />
             </Routes>
         </BrowserRouter>
     );

@@ -5,7 +5,14 @@
       "Bash(npx prisma init:*)",
       "Bash(npx tailwindcss:*)",
       "Bash(npx prisma generate:*)",
-      "Bash(timeout 5 npx tsx:*)"
+      "Bash(timeout 5 npx tsx:*)",
+      "Bash(cd /c/Programmation/aco/accoradd-games/server && npx tsc --noEmit 2>&1)",
+      "Bash(cd /c/Programmation/aco/accoradd-games/client && npx tsc --noEmit 2>&1)",
+      "Bash(echo SERVER OK:*)",
+      "Bash(echo CLIENT OK:*)",
+      "Bash(cd /c/Programmation/aco/accoradd-games/server && npm run seed 2>&1)",
+      "Bash(echo OK:*)",
+      "Bash(node:*)"
     ]
   }
 }

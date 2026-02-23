@@ -10,6 +10,7 @@ import express from "express";
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom.js";
+import { LobbyRoom } from "./rooms/LobbyRoom.js";
 
 /**
  * Import API routes
@@ -21,7 +22,8 @@ const server = defineServer({
      * Define your room handlers:
      */
     rooms: {
-        my_room: defineRoom(MyRoom)
+        my_room: defineRoom(MyRoom),
+        lobby: defineRoom(LobbyRoom),
     },
 
     /**
