@@ -8,6 +8,12 @@ import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices
 import { colyseusClient } from "../webservices/colyseus";
 import MemoryGame from "../components/games/MemoryGame";
 
+// ── Reconnection token persistence ─────────────────────────────────────────
+function tokenKey(roomId: string) { return `reconnect_${roomId}`; }
+function loadToken(roomId: string) { return localStorage.getItem(tokenKey(roomId)) ?? ""; }
+function saveToken(roomId: string, token: string) { localStorage.setItem(tokenKey(roomId), token); }
+function clearToken(roomId: string) { localStorage.removeItem(tokenKey(roomId)); }
+
 export default function GamePage() {
     const { slug = "", roomId = "" } = useParams<{ slug: string; roomId: string }>();
     const navigate = useNavigate();
@@ -73,6 +79,7 @@ export default function GamePage() {
 
         room.onMessage("lobby:return", () => {
             if (cancelledRef.current) return;
+            clearToken(roomId);
             returningToLobbyRef.current = true;
             navigate(`/lobby/${roomId}`);
         });
@@ -92,8 +99,9 @@ export default function GamePage() {
                 const newRoom = await colyseusClient.reconnect<LobbyState>(token);
                 if (cancelledRef.current) { newRoom.leave(); return; }
 
-                roomRef.current = newRoom;
                 reconnectionTokenRef.current = newRoom.reconnectionToken;
+                saveToken(roomId, newRoom.reconnectionToken);
+                roomRef.current = newRoom;
                 setCurrentRoom(newRoom);
                 setSessionId(newRoom.sessionId);
                 bindRoomHandlers(newRoom);
@@ -105,6 +113,7 @@ export default function GamePage() {
         }
 
         // All attempts failed
+        clearToken(roomId);
         if (!cancelledRef.current) {
             navigate("/");
         }
@@ -113,6 +122,7 @@ export default function GamePage() {
     useEffect(() => {
         if (!roomId) return;
         cancelledRef.current = false;
+        returningToLobbyRef.current = false;
 
         if (!getStoredPlayer()) {
             navigate("/");
@@ -122,13 +132,28 @@ export default function GamePage() {
         async function connect() {
             try {
                 let room = getCurrentRoom(roomId);
+
                 if (!room) {
-                    room = await joinLobby(roomId);
+                    // Try reconnecting with a persisted token before falling back to a fresh join
+                    const storedToken = loadToken(roomId);
+                    if (storedToken) {
+                        try {
+                            room = await colyseusClient.reconnect<LobbyState>(storedToken);
+                        } catch {
+                            // Token expired or invalid — fall through to fresh join
+                            clearToken(roomId);
+                            room = await joinLobby(roomId);
+                        }
+                    } else {
+                        room = await joinLobby(roomId);
+                    }
                 }
+
                 if (cancelledRef.current) { room.leave(); return; }
 
-                roomRef.current = room;
                 reconnectionTokenRef.current = room.reconnectionToken;
+                saveToken(roomId, room.reconnectionToken);
+                roomRef.current = room;
                 setCurrentRoom(room);
                 setSessionId(room.sessionId);
                 bindRoomHandlers(room);
@@ -151,6 +176,7 @@ export default function GamePage() {
                 if (!returningToLobbyRef.current) {
                     roomRef.current.leave();
                     clearCurrentRoom();
+                    clearToken(roomId);
                 }
                 // if returningToLobbyRef is true: keep room alive in store for LobbyPage
                 roomRef.current = null;
