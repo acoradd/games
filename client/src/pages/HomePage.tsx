@@ -41,7 +41,7 @@ export default function HomePage() {
     }
 
     return (
-        <div className="h-dvh bg-gray-950 text-white">
+        <div className="h-dvh bg-gray-950 text-white flex flex-col">
             {showModal && (
                 <UsernameModal onConfirm={handleUsernameConfirm} loading={creatingPlayer} />
             )}
@@ -61,7 +61,7 @@ export default function HomePage() {
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto px-6 py-10">
+            <main className="max-w-5xl mx-auto px-6 py-10 flex-auto overflow-y-auto">
                 <section className="mb-8">
                     <h2 className="text-lg font-semibold text-gray-300 mb-3">Rejoindre une partie</h2>
                     <JoinRoomForm />

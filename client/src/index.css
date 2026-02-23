@@ -18,3 +18,9 @@ body {
     scrollbar-color:  rgb(65, 81, 106) transparent;
     scrollbar-width: thin;
 }
+
+
+#root {
+    height: 100%;
+    width: 100%;
+}
