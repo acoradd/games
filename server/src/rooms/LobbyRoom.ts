@@ -1,8 +1,15 @@
-import { Room, Client, CloseCode } from "colyseus";
+import { Room, Client, CloseCode, ServerError } from "colyseus";
 import { LobbyState, LobbyPlayer, ChatMessage } from "./schema/LobbyState.js";
+import { verifyToken } from "../services/player.service.js";
 
 interface JoinOptions {
     username?: string;
+    token?: string;
+}
+
+interface AuthPayload {
+    playerId: number;
+    username: string;
 }
 
 // ── Memory game types (server-only) ────────────────────────────────────────
@@ -32,6 +39,11 @@ const SYMBOLS = [
 export class LobbyRoom extends Room<{ state: LobbyState }> {
     maxClients = 8;
 
+    // playerId → sessionId (active connections only)
+    private playerIdMap = new Map<number, string>();
+    // sessionId → playerId (reverse lookup for cleanup)
+    private sessionToPlayerId = new Map<string, number>();
+
     private currentTurnTimer: { clear(): void } | null = null;
 
     onCreate(_options: Record<string, unknown>) {
@@ -39,12 +51,31 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         this.autoDispose = true;
     }
 
-    onJoin(client: Client, options: JoinOptions) {
+    onAuth(_client: Client, options: JoinOptions): AuthPayload {
+        if (!options.token) {
+            throw new ServerError(401, "Token manquant");
+        }
+
+        let payload: AuthPayload;
+        try {
+            payload = verifyToken(options.token) as AuthPayload;
+        } catch {
+            throw new ServerError(401, "Token invalide");
+        }
+
+        if (this.playerIdMap.has(payload.playerId)) {
+            throw new ServerError(409, "Déjà connecté dans cette room");
+        }
+
+        return payload;
+    }
+
+    onJoin(client: Client, _options: JoinOptions, auth: AuthPayload) {
         const isFirstPlayer = this.state.players.size === 0;
 
         const player = new LobbyPlayer();
         player.id = client.sessionId;
-        player.username = options.username?.trim().slice(0, 32) ?? "Anonyme";
+        player.username = auth.username.trim().slice(0, 32);
         player.isHost = isFirstPlayer;
         player.isReady = false;
         player.isConnected = true;
@@ -53,6 +84,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         if (isFirstPlayer) {
             this.state.hostId = client.sessionId;
         }
+
+        this.playerIdMap.set(auth.playerId, client.sessionId);
+        this.sessionToPlayerId.set(client.sessionId, auth.playerId);
 
         this.state.players.set(client.sessionId, player);
         console.log(`[LobbyRoom ${this.roomId}] ${player.username} joined (host: ${player.isHost})`);
@@ -94,6 +128,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     // ── Private helpers ─────────────────────────────────────────────────────
 
     private removePlayer(sessionId: string, leaving: LobbyPlayer) {
+        const playerId = this.sessionToPlayerId.get(sessionId);
+        if (playerId) {
+            this.playerIdMap.delete(playerId);
+            this.sessionToPlayerId.delete(sessionId);
+        }
+
         this.state.players.delete(sessionId);
         if (leaving.isHost && this.state.players.size > 0) {
             const nextEntry = this.state.players.entries().next().value;
@@ -111,6 +151,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         player.isEliminated = true;
         player.isConnected = false;
+
+        // Free the playerId slot so the player can potentially rejoin as spectator
+        const playerId = this.sessionToPlayerId.get(sessionId);
+        if (playerId) {
+            this.playerIdMap.delete(playerId);
+            this.sessionToPlayerId.delete(sessionId);
+        }
 
         if (this.state.status !== "game") return;
 

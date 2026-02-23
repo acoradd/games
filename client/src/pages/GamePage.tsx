@@ -14,6 +14,33 @@ function loadToken(roomId: string) { return localStorage.getItem(tokenKey(roomId
 function saveToken(roomId: string, token: string) { localStorage.setItem(tokenKey(roomId), token); }
 function clearToken(roomId: string) { localStorage.removeItem(tokenKey(roomId)); }
 
+// ── Cross-tab detection via BroadcastChannel ────────────────────────────────
+// Ask other tabs if they already hold the room connection.
+// Returns true if another tab responds within 200 ms.
+function checkOtherTabActive(roomId: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const channel = new BroadcastChannel(`room_${roomId}`);
+        let resolved = false;
+
+        channel.onmessage = (e) => {
+            if (e.data === "active" && !resolved) {
+                resolved = true;
+                channel.close();
+                resolve(true);
+            }
+        };
+
+        channel.postMessage("check");
+
+        setTimeout(() => {
+            if (!resolved) {
+                channel.close();
+                resolve(false);
+            }
+        }, 200);
+    });
+}
+
 export default function GamePage() {
     const { slug = "", roomId = "" } = useParams<{ slug: string; roomId: string }>();
     const navigate = useNavigate();
@@ -22,6 +49,8 @@ export default function GamePage() {
     const reconnectionTokenRef = useRef<string>("");
     const cancelledRef = useRef(false);
     const returningToLobbyRef = useRef(false);
+    // BroadcastChannel that advertises "this tab holds the room connection"
+    const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -30,6 +59,16 @@ export default function GamePage() {
     const [sessionId, setSessionId] = useState("");
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
     const [gameState, setGameState] = useState<MemoryGameState | null>(null);
+
+    // Open the BroadcastChannel and start responding "active" to "check" pings.
+    function openBroadcastChannel(id: string) {
+        broadcastChannelRef.current?.close();
+        const channel = new BroadcastChannel(`room_${id}`);
+        channel.onmessage = (e) => {
+            if (e.data === "check") channel.postMessage("active");
+        };
+        broadcastChannelRef.current = channel;
+    }
 
     const syncState = useCallback((state: unknown) => {
         if (!state) return;
@@ -105,6 +144,7 @@ export default function GamePage() {
                 setCurrentRoom(newRoom);
                 setSessionId(newRoom.sessionId);
                 bindRoomHandlers(newRoom);
+                openBroadcastChannel(roomId);
                 setReconnecting(false);
                 return;
             } catch (err) {
@@ -134,14 +174,19 @@ export default function GamePage() {
                 let room = getCurrentRoom(roomId);
 
                 if (!room) {
-                    // Try reconnecting with a persisted token before falling back to a fresh join
                     const storedToken = loadToken(roomId);
                     if (storedToken) {
-                        try {
-                            room = await colyseusClient.reconnect<LobbyState>(storedToken);
-                        } catch {
-                            // Token expired or invalid — fall through to fresh join
-                            clearToken(roomId);
+                        // Check if another tab is already holding this room — if so, don't steal it.
+                        const anotherTabActive = await checkOtherTabActive(roomId);
+                        if (!anotherTabActive) {
+                            try {
+                                room = await colyseusClient.reconnect<LobbyState>(storedToken);
+                            } catch {
+                                // Token expired or no pending reconnection — fall through to fresh join
+                                clearToken(roomId);
+                                room = await joinLobby(roomId);
+                            }
+                        } else {
                             room = await joinLobby(roomId);
                         }
                     } else {
@@ -157,6 +202,7 @@ export default function GamePage() {
                 setCurrentRoom(room);
                 setSessionId(room.sessionId);
                 bindRoomHandlers(room);
+                openBroadcastChannel(roomId);
                 setLoading(false);
             } catch (err: unknown) {
                 console.error("[GamePage] connect error:", err);
@@ -172,13 +218,14 @@ export default function GamePage() {
 
         return () => {
             cancelledRef.current = true;
+            broadcastChannelRef.current?.close();
+            broadcastChannelRef.current = null;
             if (roomRef.current) {
                 if (!returningToLobbyRef.current) {
                     roomRef.current.leave();
                     clearCurrentRoom();
                     clearToken(roomId);
                 }
-                // if returningToLobbyRef is true: keep room alive in store for LobbyPage
                 roomRef.current = null;
             }
         };
