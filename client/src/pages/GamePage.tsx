@@ -4,7 +4,8 @@ import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, MemoryGameState } from "../models/Lobby";
 import { joinLobby } from "../services/lobbyService";
 import { getStoredPlayer } from "../services/playerService";
-import { getCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
+import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
+import { colyseusClient } from "../webservices/colyseus";
 import MemoryGame from "../components/games/MemoryGame";
 
 export default function GamePage() {
@@ -12,9 +13,12 @@ export default function GamePage() {
     const navigate = useNavigate();
 
     const roomRef = useRef<Room<LobbyState> | null>(null);
+    const reconnectionTokenRef = useRef<string>("");
+    const cancelledRef = useRef(false);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [reconnecting, setReconnecting] = useState(false);
 
     const [sessionId, setSessionId] = useState("");
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
@@ -29,11 +33,13 @@ export default function GamePage() {
         if (playersRaw) {
             if (typeof (playersRaw as Map<string, unknown>).forEach === "function") {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady })
+                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
                 );
             } else {
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady })
+                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
                 );
             }
         }
@@ -47,9 +53,59 @@ export default function GamePage() {
         }
     }, []);
 
+    const bindRoomHandlers = useCallback((room: Room<LobbyState>) => {
+        if (room.state) {
+            syncState(room.state as unknown as LobbyState);
+        }
+
+        room.onStateChange((state) => {
+            syncState(state as unknown as LobbyState);
+        });
+
+        room.onLeave((code) => {
+            // 4000 = consented (we called room.leave()), 1000 = normal close — skip reconnect
+            if (code === 4000 || code === 1000) return;
+            if (cancelledRef.current) return;
+            setReconnecting(true);
+            attemptReconnect(reconnectionTokenRef.current);
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [syncState]);
+
+    async function attemptReconnect(token: string) {
+        const MAX_ATTEMPTS = 3;
+        const DELAY_MS = 3000;
+
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            if (cancelledRef.current) return;
+            if (attempt > 0) {
+                await new Promise<void>((resolve) => setTimeout(resolve, DELAY_MS));
+            }
+            try {
+                const newRoom = await colyseusClient.reconnect<LobbyState>(token);
+                if (cancelledRef.current) { newRoom.leave(); return; }
+
+                roomRef.current = newRoom;
+                reconnectionTokenRef.current = newRoom.reconnectionToken;
+                setCurrentRoom(newRoom);
+                setSessionId(newRoom.sessionId);
+                bindRoomHandlers(newRoom);
+                setReconnecting(false);
+                return;
+            } catch (err) {
+                console.warn(`[GamePage] reconnect attempt ${attempt + 1} failed:`, err);
+            }
+        }
+
+        // All attempts failed
+        if (!cancelledRef.current) {
+            navigate("/");
+        }
+    }
+
     useEffect(() => {
         if (!roomId) return;
-        let cancelled = false;
+        cancelledRef.current = false;
 
         if (!getStoredPlayer()) {
             navigate("/");
@@ -62,23 +118,17 @@ export default function GamePage() {
                 if (!room) {
                     room = await joinLobby(roomId);
                 }
-                if (cancelled) { room.leave(); return; }
+                if (cancelledRef.current) { room.leave(); return; }
 
                 roomRef.current = room;
+                reconnectionTokenRef.current = room.reconnectionToken;
+                setCurrentRoom(room);
                 setSessionId(room.sessionId);
-
-                if (room.state) {
-                    syncState(room.state as unknown as LobbyState);
-                }
-
-                room.onStateChange((state) => {
-                    syncState(state as unknown as LobbyState);
-                });
-
+                bindRoomHandlers(room);
                 setLoading(false);
             } catch (err: unknown) {
                 console.error("[GamePage] connect error:", err);
-                if (!cancelled) {
+                if (!cancelledRef.current) {
                     const msg = err instanceof Error ? err.message : String(err);
                     setError(`Erreur de connexion — ${msg}`);
                     setLoading(false);
@@ -89,7 +139,7 @@ export default function GamePage() {
         connect();
 
         return () => {
-            cancelled = true;
+            cancelledRef.current = true;
             if (roomRef.current) {
                 roomRef.current.leave();
                 clearCurrentRoom();
@@ -120,21 +170,30 @@ export default function GamePage() {
         );
     }
 
-    if (slug === "memory" && gameState) {
-        return (
-            <MemoryGame
-                room={roomRef.current!}
-                sessionId={sessionId}
-                gameState={gameState}
-                players={players}
-                roomId={roomId}
-            />
-        );
-    }
-
     return (
-        <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
-            <p className="text-gray-400">Jeu "{slug}" — en cours de développement.</p>
-        </div>
+        <>
+            {reconnecting && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                    <div className="bg-gray-900 border border-gray-700 rounded-2xl px-8 py-6 text-center">
+                        <p className="text-white font-semibold mb-1">Reconnexion…</p>
+                        <p className="text-gray-400 text-sm">Tentative de reconnexion au serveur</p>
+                    </div>
+                </div>
+            )}
+
+            {slug === "memory" && gameState ? (
+                <MemoryGame
+                    room={roomRef.current!}
+                    sessionId={sessionId}
+                    gameState={gameState}
+                    players={players}
+                    roomId={roomId}
+                />
+            ) : (
+                <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
+                    <p className="text-gray-400">Jeu "{slug}" — en cours de développement.</p>
+                </div>
+            )}
+        </>
     );
 }

@@ -3,6 +3,8 @@ export interface LobbyPlayer {
     username: string;
     isHost: boolean;
     isReady: boolean;
+    isConnected: boolean;
+    isEliminated: boolean;
 }
 
 export interface ChatMsg {
@@ -35,4 +37,6 @@ export interface MemoryGameState {
     firstFlippedIndex: number;
     cards: MemoryCard[];
     scores: Record<string, number>;
+    turnDeadline: number;
+    playerNames: Record<string, string>;
 }

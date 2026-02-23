@@ -127,12 +127,14 @@ export default function LobbyPage() {
         if (playersRaw) {
             if (typeof (playersRaw as Map<string, unknown>).forEach === "function") {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady })
+                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
                 );
             } else {
                 // fallback plain object
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady })
+                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
                 );
             }
         }

@@ -11,6 +11,8 @@ export class LobbyPlayer extends Schema {
     @type("string") username: string = "";
     @type("boolean") isHost: boolean = false;
     @type("boolean") isReady: boolean = false;
+    @type("boolean") isConnected: boolean = true;
+    @type("boolean") isEliminated: boolean = false;
 }
 
 export class LobbyState extends Schema {

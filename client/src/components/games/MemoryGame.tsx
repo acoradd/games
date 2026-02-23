@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, MemoryCard, MemoryGameState } from "../../models/Lobby";
 
@@ -49,10 +50,24 @@ function CardButton({
 
 export default function MemoryGame({ room, sessionId, gameState, players, roomId }: Props) {
     const navigate = useNavigate();
-    const { phase, currentTurnId, cards, scores } = gameState;
+    const { phase, currentTurnId, cards, scores, turnDeadline, playerNames } = gameState;
 
     const isMyTurn = sessionId === currentTurnId;
     const canInteract = isMyTurn && phase !== "revealing" && phase !== "ended";
+
+    // ── Turn countdown ──────────────────────────────────────────────────────
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!turnDeadline) {
+            setTimeLeft(null);
+            return;
+        }
+        const tick = () => setTimeLeft(Math.max(0, Math.ceil((turnDeadline - Date.now()) / 1000)));
+        tick();
+        const id = setInterval(tick, 500);
+        return () => clearInterval(id);
+    }, [turnDeadline]);
 
     function handleFlip(index: number) {
         if (!canInteract) return;
@@ -61,12 +76,15 @@ export default function MemoryGame({ room, sessionId, gameState, players, roomId
 
     const colsClass = cards.length > 16 ? "grid-cols-6" : "grid-cols-4";
 
-    // Sort players by score descending for scoreboard
-    const ranked = [...players].sort(
-        (a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0)
+    // ── Scoreboard — built from playerNames snapshot ────────────────────────
+    // playerNames contains all participants from the start, even those who left the room
+    const participantIds = Object.keys(playerNames ?? {});
+    const ranked = [...participantIds].sort(
+        (a, b) => (scores[b] ?? 0) - (scores[a] ?? 0)
     );
 
     const currentPlayer = players.find((p) => p.id === currentTurnId);
+    const playerById = new Map(players.map((p) => [p.id, p]));
 
     return (
         <div className="h-dvh bg-gray-950 text-white flex flex-col">
@@ -77,11 +95,16 @@ export default function MemoryGame({ room, sessionId, gameState, players, roomId
                 <span className="font-bold text-white">Memory</span>
                 <span className="text-gray-600 text-sm">|</span>
                 {phase !== "ended" && (
-                    <span className="text-sm text-gray-400">
+                    <span className="text-sm text-gray-400 flex items-center gap-2">
                         {isMyTurn
                             ? <span className="text-violet-400 font-semibold">Votre tour</span>
                             : <span>Tour de <span className="text-white font-medium">{currentPlayer?.username ?? "…"}</span></span>
                         }
+                        {timeLeft !== null && (
+                            <span className={`font-mono font-bold text-sm ${timeLeft <= 5 ? "text-red-400" : "text-gray-400"}`}>
+                                {timeLeft}s
+                            </span>
+                        )}
                     </span>
                 )}
             </header>
@@ -112,21 +135,37 @@ export default function MemoryGame({ room, sessionId, gameState, players, roomId
                 <aside className="w-44 shrink-0 border-l border-gray-800 p-4 flex flex-col gap-3 overflow-y-auto">
                     <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Scores</p>
                     <ul className="flex flex-col gap-2">
-                        {ranked.map((p) => (
-                            <li
-                                key={p.id}
-                                className={`flex items-center justify-between gap-2 text-sm ${
-                                    p.id === currentTurnId ? "text-violet-300" : "text-gray-300"
-                                }`}
-                            >
-                                <span className="truncate flex items-center gap-1">
-                                    {p.id === currentTurnId && <span className="text-violet-400">▶</span>}
-                                    {p.username}
-                                    {p.id === sessionId && <span className="text-gray-600 text-xs">(vous)</span>}
-                                </span>
-                                <span className="font-bold shrink-0">{scores[p.id] ?? 0}</span>
-                            </li>
-                        ))}
+                        {ranked.map((id) => {
+                            const name = playerNames[id] ?? id;
+                            const p = playerById.get(id);
+                            const isCurrentTurn = id === currentTurnId;
+                            const isEliminated = p?.isEliminated ?? false;
+                            const isConnected = p?.isConnected ?? true;
+                            const isMe = id === sessionId;
+
+                            return (
+                                <li
+                                    key={id}
+                                    className={`flex items-center justify-between gap-2 text-sm ${
+                                        isEliminated
+                                            ? "text-gray-600"
+                                            : isCurrentTurn
+                                            ? "text-violet-300"
+                                            : "text-gray-300"
+                                    }`}
+                                >
+                                    <span className={`truncate flex items-center gap-1 ${isEliminated ? "line-through" : ""}`}>
+                                        {isCurrentTurn && !isEliminated && <span className="text-violet-400">▶</span>}
+                                        {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
+                                        {name}
+                                        {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
+                                        {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
+                                        {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
+                                    </span>
+                                    <span className="font-bold shrink-0">{scores[id] ?? 0}</span>
+                                </li>
+                            );
+                        })}
                     </ul>
                     <p className="text-xs text-gray-600 mt-auto">
                         {cards.filter((c) => c.isMatched).length / 2} / {cards.length / 2} paires
@@ -142,18 +181,25 @@ export default function MemoryGame({ room, sessionId, gameState, players, roomId
                         <h2 className="text-xl font-bold text-white mb-1">Partie terminée !</h2>
                         <p className="text-gray-400 text-sm mb-6">Classement final</p>
                         <ul className="flex flex-col gap-2 mb-6">
-                            {ranked.map((p, i) => (
-                                <li key={p.id} className="flex items-center justify-between text-sm">
-                                    <span className="flex items-center gap-2">
-                                        <span className="text-gray-500 w-4">{i + 1}.</span>
-                                        <span className={i === 0 ? "text-yellow-400 font-bold" : "text-gray-300"}>
-                                            {p.username}
-                                            {p.id === sessionId && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                            {ranked.map((id, i) => {
+                                const name = playerNames[id] ?? id;
+                                const p = playerById.get(id);
+                                const isEliminated = p?.isEliminated ?? false;
+                                const isMe = id === sessionId;
+                                return (
+                                    <li key={id} className="flex items-center justify-between text-sm">
+                                        <span className="flex items-center gap-2">
+                                            <span className="text-gray-500 w-4">{i + 1}.</span>
+                                            <span className={`${isEliminated ? "line-through text-gray-500" : i === 0 ? "text-yellow-400 font-bold" : "text-gray-300"}`}>
+                                                {name}
+                                                {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                                                {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
+                                            </span>
                                         </span>
-                                    </span>
-                                    <span className="font-bold text-white">{scores[p.id] ?? 0} pts</span>
-                                </li>
-                            ))}
+                                        <span className="font-bold text-white">{scores[id] ?? 0} pts</span>
+                                    </li>
+                                );
+                            })}
                         </ul>
                         <button
                             onClick={() => navigate(`/lobby/${roomId}`)}

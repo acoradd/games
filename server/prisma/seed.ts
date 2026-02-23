@@ -37,7 +37,8 @@ async function main() {
             maxPlayers: 4,
             isActive: true,
             options: {
-                pairs: { type: "select", options: ["8", "12", "16", "24"], default: "12", label: "Nombre de paires" },
+                pairs:        { type: "select", options: ["8", "12", "16", "24"],        default: "12", label: "Nombre de paires" },
+                turnTimeout:  { type: "select", options: ["10", "15", "30", "60", "0"], default: "30", label: "Temps par tour (s, 0=∞)" },
             },
         },
         {
