@@ -41,7 +41,7 @@ export default function HomePage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-950 text-white">
+        <div className="h-dvh bg-gray-950 text-white">
             {showModal && (
                 <UsernameModal onConfirm={handleUsernameConfirm} loading={creatingPlayer} />
             )}

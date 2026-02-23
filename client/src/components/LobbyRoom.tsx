@@ -56,7 +56,7 @@ export default function LobbyRoom({ room, gameSlug }: LobbyRoomProps) {
     const me = players.find((p) => p.id === mySessionId);
 
     return (
-        <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4">
+        <div className="h-dvh bg-gray-950 text-white flex items-center justify-center p-4">
             <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-6 flex flex-col gap-6">
 
                 {/* Header */}

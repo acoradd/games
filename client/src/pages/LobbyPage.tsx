@@ -263,7 +263,7 @@ export default function LobbyPage() {
     // ── États de chargement / erreur ────────────────────────────────────────
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+            <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
                 <p className="text-gray-400">Connexion au lobby…</p>
             </div>
         );
@@ -271,7 +271,7 @@ export default function LobbyPage() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4">
+            <div className="h-dvh bg-gray-950 text-white flex items-center justify-center p-4">
                 <div className="text-center">
                     <p className="text-red-400 mb-4">{error}</p>
                     <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white underline text-sm">
@@ -284,7 +284,7 @@ export default function LobbyPage() {
 
     // ── Render ───────────────────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+        <div className="h-dvh bg-gray-950 text-white flex flex-col">
 
             {/* ── Header ── */}
             <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-4 flex-wrap">

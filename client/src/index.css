@@ -1,3 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+body {
+    box-sizing: border-box;
+    height: 100dvh;
+    width: 100dvw;
+}
+
+#root {
+    height: 100%;
+    width: 100%;
+}
+
+* {
+    scrollbar-color:  rgb(65, 81, 106) transparent;
+    scrollbar-width: thin;
+}

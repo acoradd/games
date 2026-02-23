@@ -29,7 +29,7 @@ export default function CreateLobbyPage() {
     }, [navigate]);
 
     return (
-        <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+        <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
             <p className="text-gray-400">Création du lobby…</p>
         </div>
     );

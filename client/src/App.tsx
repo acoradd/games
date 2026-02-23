@@ -15,7 +15,7 @@ function App() {
                 <Route
                     path="/game/:slug/play/:roomId"
                     element={
-                        <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+                        <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
                             <p className="text-gray-400">Jeu en cours — Plan 3</p>
                         </div>
                     }
