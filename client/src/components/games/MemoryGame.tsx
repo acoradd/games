@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, LobbyState, MemoryCard, MemoryGameState } from "../../models/Lobby";
+import type { LobbyPlayer, LobbyState, MemoryCard, MemoryGameState, ChatMsg } from "../../models/Lobby";
 
 const SYMBOLS = [
     "🎮","🎲","🎯","⚽","🏀","🎾","🏆","🚀","🌟","🎪",
@@ -13,6 +13,7 @@ interface Props {
     sessionId: string;
     gameState: MemoryGameState;
     players: LobbyPlayer[];
+    chatMessages: ChatMsg[];
 }
 
 function CardButton({
@@ -46,7 +47,7 @@ function CardButton({
     );
 }
 
-export default function MemoryGame({ room, sessionId, gameState, players }: Props) {
+export default function MemoryGame({ room, sessionId, gameState, players, chatMessages }: Props) {
     const { phase, currentTurnId, cards, scores, turnDeadline, playerNames } = gameState;
 
     const isMyTurn = sessionId === currentTurnId;
@@ -67,6 +68,22 @@ export default function MemoryGame({ room, sessionId, gameState, players }: Prop
         return () => clearInterval(id);
     }, [turnDeadline]);
 
+    // ── Chat ────────────────────────────────────────────────────────────────
+    const [chatInput, setChatInput] = useState("");
+    const chatEndRef = useRef<HTMLDivElement>(null);
+    const myUsername = playerNames[sessionId] ?? "";
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [chatMessages]);
+
+    function handleChat(e: React.FormEvent) {
+        e.preventDefault();
+        if (!chatInput.trim()) return;
+        room.send("chat", { text: chatInput.trim() });
+        setChatInput("");
+    }
+
     function handleFlip(index: number) {
         if (!canInteract) return;
         room.send("flipCard", { index });
@@ -75,7 +92,6 @@ export default function MemoryGame({ room, sessionId, gameState, players }: Prop
     const colsClass = cards.length > 16 ? "grid-cols-6" : "grid-cols-4";
 
     // ── Scoreboard — built from playerNames snapshot ────────────────────────
-    // playerNames contains all participants from the start, even those who left the room
     const participantIds = Object.keys(playerNames ?? {});
     const ranked = [...participantIds].sort(
         (a, b) => (scores[b] ?? 0) - (scores[a] ?? 0)
@@ -129,45 +145,96 @@ export default function MemoryGame({ room, sessionId, gameState, players }: Prop
                     </div>
                 </main>
 
-                {/* Scoreboard sidebar */}
-                <aside className="w-44 shrink-0 border-l border-gray-800 p-4 flex flex-col gap-3 overflow-y-auto">
-                    <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Scores</p>
-                    <ul className="flex flex-col gap-2">
-                        {ranked.map((id) => {
-                            const name = playerNames[id] ?? id;
-                            const p = playerById.get(id);
-                            const isCurrentTurn = id === currentTurnId;
-                            const isEliminated = p?.isEliminated ?? false;
-                            const isConnected = p?.isConnected ?? true;
-                            const isMe = id === sessionId;
+                {/* Right panel: scoreboard + chat */}
+                <aside className="w-56 shrink-0 border-l border-gray-800 flex flex-col">
 
-                            return (
-                                <li
-                                    key={id}
-                                    className={`flex items-center justify-between gap-2 text-sm ${
-                                        isEliminated
-                                            ? "text-gray-600"
-                                            : isCurrentTurn
-                                            ? "text-violet-300"
-                                            : "text-gray-300"
-                                    }`}
-                                >
-                                    <span className={`truncate flex items-center gap-1 ${isEliminated ? "line-through" : ""}`}>
-                                        {isCurrentTurn && !isEliminated && <span className="text-violet-400">▶</span>}
-                                        {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
-                                        {name}
-                                        {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
-                                        {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
-                                        {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
-                                    </span>
-                                    <span className="font-bold shrink-0">{scores[id] ?? 0}</span>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                    <p className="text-xs text-gray-600 mt-auto">
-                        {cards.filter((c) => c.isMatched).length / 2} / {cards.length / 2} paires
-                    </p>
+                    {/* Scoreboard */}
+                    <div className="p-4 border-b border-gray-800 shrink-0">
+                        <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">Scores</p>
+                        <ul className="flex flex-col gap-2">
+                            {ranked.map((id) => {
+                                const name = playerNames[id] ?? id;
+                                const p = playerById.get(id);
+                                const isCurrentTurn = id === currentTurnId;
+                                const isEliminated = p?.isEliminated ?? false;
+                                const isConnected = p?.isConnected ?? true;
+                                const isMe = id === sessionId;
+
+                                return (
+                                    <li
+                                        key={id}
+                                        className={`flex items-center justify-between gap-2 text-sm ${
+                                            isEliminated
+                                                ? "text-gray-600"
+                                                : isCurrentTurn
+                                                ? "text-violet-300"
+                                                : "text-gray-300"
+                                        }`}
+                                    >
+                                        <span className={`truncate flex items-center gap-1 ${isEliminated ? "line-through" : ""}`}>
+                                            {isCurrentTurn && !isEliminated && <span className="text-violet-400">▶</span>}
+                                            {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
+                                            {name}
+                                            {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
+                                            {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
+                                            {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
+                                        </span>
+                                        <span className="font-bold shrink-0">{scores[id] ?? 0}</span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                        <p className="text-xs text-gray-600 mt-3">
+                            {cards.filter((c) => c.isMatched).length / 2} / {cards.length / 2} paires
+                        </p>
+                    </div>
+
+                    {/* Chat */}
+                    <div className="flex flex-col flex-1 min-h-0">
+                        <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2 shrink-0">Chat</p>
+
+                        <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
+                            {chatMessages.length === 0 && (
+                                <p className="text-gray-700 text-xs text-center mt-4">Aucun message.</p>
+                            )}
+                            {chatMessages.map((msg, i) => {
+                                const isMine = msg.username === myUsername;
+                                return (
+                                    <div key={i} className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}>
+                                        {!isMine && (
+                                            <span className="text-xs text-gray-500 px-1">{msg.username}</span>
+                                        )}
+                                        <div className={`max-w-[90%] px-3 py-1.5 rounded-2xl text-sm break-words ${
+                                            isMine
+                                                ? "bg-indigo-600 text-white rounded-tr-sm"
+                                                : "bg-gray-700 text-gray-100 rounded-tl-sm"
+                                        }`}>
+                                            {msg.text}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div ref={chatEndRef} />
+                        </div>
+
+                        <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-gray-800 shrink-0">
+                            <input
+                                type="text"
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Message…"
+                                maxLength={200}
+                                className="flex-1 min-w-0 bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                            />
+                            <button
+                                type="submit"
+                                disabled={!chatInput.trim()}
+                                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white px-3 py-2 rounded-lg transition-colors text-sm"
+                            >
+                                ↑
+                            </button>
+                        </form>
+                    </div>
                 </aside>
             </div>
 

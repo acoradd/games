@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, LobbyState, MemoryGameState } from "../models/Lobby";
+import type { LobbyPlayer, LobbyState, MemoryGameState, ChatMsg } from "../models/Lobby";
 import { joinLobby } from "../services/lobbyService";
 import { getStoredPlayer } from "../services/playerService";
 import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
@@ -59,6 +59,7 @@ export default function GamePage() {
     const [sessionId, setSessionId] = useState("");
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
     const [gameState, setGameState] = useState<MemoryGameState | null>(null);
+    const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
 
     // Open the BroadcastChannel and start responding "active" to "check" pings.
     function openBroadcastChannel(id: string) {
@@ -97,6 +98,18 @@ export default function GamePage() {
         } catch {
             // ignore parse errors
         }
+
+        const chat: ChatMsg[] = [];
+        const historyRaw = s["chatHistory"];
+        if (historyRaw) {
+            const iter = typeof (historyRaw as { forEach?: unknown }).forEach === "function"
+                ? historyRaw as Iterable<{ username: string; text: string; timestamp: number }>
+                : Object.values(historyRaw as object) as { username: string; text: string; timestamp: number }[];
+            for (const m of iter as { username: string; text: string; timestamp: number }[]) {
+                chat.push({ username: m.username, text: m.text, ts: m.timestamp });
+            }
+        }
+        setChatMessages(chat);
     }, []);
 
     const bindRoomHandlers = useCallback((room: Room<LobbyState>) => {
@@ -270,6 +283,7 @@ export default function GamePage() {
                     sessionId={sessionId}
                     gameState={gameState}
                     players={players}
+                    chatMessages={chatMessages}
                 />
             ) : (
                 <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">

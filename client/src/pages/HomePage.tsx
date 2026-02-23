@@ -47,7 +47,7 @@ export default function HomePage() {
             )}
 
             <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">AccorAdd Games</h1>
+                <h1 className="text-2xl font-bold tracking-tight">AccoGames</h1>
                 <div className="flex items-center gap-4">
                     {getStoredPlayer() && (
                         <span className="text-gray-400 text-sm">{getStoredPlayer()?.player.username}</span>
