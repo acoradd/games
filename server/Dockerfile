@@ -21,6 +21,8 @@ WORKDIR /app/server
 RUN npm ci --omit=dev
 COPY --from=builder /app/server/build ./build
 COPY --from=builder /app/server/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/server/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/server/node_modules/@prisma ./node_modules/@prisma
 COPY server/prisma ./prisma
 COPY server/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
