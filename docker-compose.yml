@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: games
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-games}
+      POSTGRES_DB: games
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U games"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    image: accoradd/games-server:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://games:${POSTGRES_PASSWORD:-games}@db:5432/games?schema=games
+      JWT_SECRET: ${JWT_SECRET:-changeme_dev}
+      NODE_ENV: production
+      PORT: 2567
+    ports:
+      - "2567:2567"
+
+  client:
+    image: accoradd/games-client:latest
+    depends_on:
+      - server
+    environment:
+      API_URL: ${API_URL:-localhost:2567}
+    ports:
+      - "80:80"
+
+volumes:
+  pgdata:

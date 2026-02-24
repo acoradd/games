@@ -1,5 +1,4 @@
 import { Client } from "@colyseus/sdk";
+import { env } from "./env.ts";
 
-export const colyseusClient = new Client(
-    import.meta.env.VITE_COLYSEUS_URL ?? "ws://localhost:2567"
-);
+export const colyseusClient = new Client(env.colyseusUrl);

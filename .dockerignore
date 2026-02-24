@@ -1,0 +1,8 @@
+**/node_modules
+**/.env
+**/.env.*
+server/build
+client/dist
+**/.git
+**/coverage
+examples/
