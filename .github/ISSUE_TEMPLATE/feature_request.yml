@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a new game, improvement, or feature
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this solve or what is missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - New game mode
+        - Lobby / matchmaking
+        - UI / UX
+        - Server / performance
+        - DevOps / Docker
+        - Other
+    validations:
+      required: true
