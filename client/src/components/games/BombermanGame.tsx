@@ -21,6 +21,14 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
     const ranked = [...playerOrder].sort(
         (a, b) => (gsPlayers[b]?.score ?? 0) - (gsPlayers[a]?.score ?? 0)
     );
+    const rankedByPoints = [...playerOrder].sort(
+        (a, b) => (gameState.roundPoints[b] ?? 0) - (gameState.roundPoints[a] ?? 0)
+    );
+
+    const roundWinnerIds = gameState.roundWinnerIds ?? [];
+    const roundWinnerName = roundWinnerIds.length === 1
+        ? (playerNames[roundWinnerIds[0]!] ?? roundWinnerIds[0])
+        : null;
 
     // ── Canvas ────────────────────────────────────────────────────────────
     const containerRef = useRef<HTMLDivElement>(null);
@@ -43,7 +51,6 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        // Grid cells
         for (let y = 0; y < rows; y++) {
             for (let x = 0; x < cols; x++) {
                 const ch = grid[y * cols + x];
@@ -55,13 +62,11 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             }
         }
 
-        // Explosions
         ctx.fillStyle = "rgba(249,115,22,0.75)";
         explosions.forEach((exp) => {
             exp.cells.forEach(({ x, y }) => ctx.fillRect(x * cs, y * cs, cs, cs));
         });
 
-        // Bonuses
         bonuses.forEach((b) => {
             const emoji = b.type === "bomb" ? "💣" : b.type === "range" ? "🎯" : "🛡️";
             ctx.font = `${cs * 0.65}px sans-serif`;
@@ -70,7 +75,6 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             ctx.fillText(emoji, (b.x + 0.5) * cs, (b.y + 0.5) * cs);
         });
 
-        // Bombs
         bombs.forEach((b) => {
             ctx.fillStyle = "#111827";
             ctx.beginPath();
@@ -87,7 +91,6 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             ctx.fillText(String(secondsLeft), (b.x + 0.5) * cs, (b.y + 0.5) * cs);
         });
 
-        // Players
         Object.entries(gsP).forEach(([sid, p]) => {
             if (!p.alive) return;
             const blink = p.invincibleTicks > 0 && Math.floor(Date.now() / 150) % 2 === 0;
@@ -144,6 +147,30 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
         };
     }, [room]);
 
+    // ── Overlays helpers ──────────────────────────────────────────────────
+    const pointsStandings = (
+        <ul className="flex flex-col gap-1 mb-4 text-left">
+            {rankedByPoints.map((id) => {
+                const gp = gsPlayers[id];
+                const pts = gameState.roundPoints[id] ?? 0;
+                const isMe = id === sessionId;
+                const isWinner = roundWinnerIds.includes(id);
+                return (
+                    <li key={id} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1.5">
+                            {gp && <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: gp.color }} />}
+                            <span className={isWinner && phase === "roundEnd" ? "text-indigo-300 font-semibold" : "text-gray-300"}>
+                                {playerNames[id] ?? id}
+                                {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                            </span>
+                        </span>
+                        <span className="font-bold text-white">{pts} pt{pts !== 1 ? "s" : ""}</span>
+                    </li>
+                );
+            })}
+        </ul>
+    );
+
     // ── Render ────────────────────────────────────────────────────────────
     return (
         <GameShell
@@ -158,6 +185,11 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                 <>
                     <span className="text-xl">💣</span>
                     <span className="font-bold">Bomberman</span>
+                    {gameState.maxRounds > 1 && (
+                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
+                            Manche {gameState.currentRound}/{gameState.maxRounds}
+                        </span>
+                    )}
                     {myPlayer && (
                         <>
                             <span className="text-gray-600 text-sm">|</span>
@@ -182,6 +214,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                             const lp = playerById.get(id);
                             const isEliminated = gp?.eliminated ?? lp?.isEliminated ?? false;
                             const isMe = id === sessionId;
+                            const pts = gameState.roundPoints[id] ?? 0;
                             return (
                                 <li key={id} className={`text-sm ${isEliminated ? "text-gray-600" : "text-gray-200"}`}>
                                     <div className={`flex items-center justify-between gap-1 ${isEliminated ? "line-through" : ""}`}>
@@ -195,7 +228,11 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                                             {name}
                                             {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
                                         </span>
-                                        <span className="font-bold shrink-0">{gp?.score ?? 0}</span>
+                                        {gameState.maxRounds > 1 ? (
+                                            <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>
+                                        ) : (
+                                            <span className="font-bold shrink-0">{gp?.score ?? 0}</span>
+                                        )}
                                     </div>
                                     {gp && !isEliminated && (
                                         <div className="flex items-center gap-2 mt-1 ml-4 text-xs text-gray-500">
@@ -219,18 +256,37 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                     <p className="text-xs text-gray-600 mt-3 hidden lg:block">↑↓←→ déplacer · Espace bombe</p>
                 </>
             }
+            roundEndContent={
+                <>
+                    <p className="text-2xl mb-2">💥</p>
+                    <h2 className="text-lg font-bold text-white mb-1">
+                        Manche {gameState.currentRound}/{gameState.maxRounds} terminée !
+                    </h2>
+                    {roundWinnerName ? (
+                        <p className="text-indigo-400 font-semibold mb-4">🏆 {roundWinnerName}</p>
+                    ) : (
+                        <p className="text-gray-400 mb-4">Égalité !</p>
+                    )}
+                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-2">Classement général</p>
+                    {pointsStandings}
+                </>
+            }
             endContent={
                 <>
-                    <p className="text-3xl mb-2">💥</p>
+                    <p className="text-3xl mb-2">🏆</p>
                     <h2 className="text-xl font-bold text-white mb-1">Partie terminée !</h2>
-                    <p className="text-gray-400 text-sm mb-6">Classement final</p>
+                    <p className="text-gray-400 text-sm mb-4">
+                        {gameState.maxRounds > 1 ? `${gameState.maxRounds} manches jouées` : "Classement final"}
+                    </p>
                     <ul className="flex flex-col gap-2 mb-4">
-                        {ranked.map((id, i) => {
-                            const name = playerNames[id] ?? id;
+                        {rankedByPoints.map((id, i) => {
                             const gp = gsPlayers[id];
                             const lp = playerById.get(id);
                             const isEliminated = gp?.eliminated ?? lp?.isEliminated ?? false;
+                            const pts = gameState.roundPoints[id] ?? 0;
                             const isMe = id === sessionId;
+                            const maxPts = gameState.roundPoints[rankedByPoints[0]!] ?? 0;
+                            const isChampion = pts === maxPts && maxPts > 0;
                             return (
                                 <li key={id} className="flex items-center justify-between text-sm">
                                     <span className="flex items-center gap-2">
@@ -241,12 +297,12 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                                                 style={{ backgroundColor: gp.color }}
                                             />
                                         )}
-                                        <span className={`${isEliminated ? "line-through text-gray-500" : i === 0 ? "text-yellow-400 font-bold" : "text-gray-300"}`}>
-                                            {name}
+                                        <span className={`${isEliminated ? "line-through text-gray-500" : isChampion && i === 0 ? "text-yellow-400 font-bold" : "text-gray-300"}`}>
+                                            {playerNames[id] ?? id}
                                             {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
                                         </span>
                                     </span>
-                                    <span className="font-bold text-white">{gp?.score ?? 0} pts</span>
+                                    <span className="font-bold text-white">{pts} pt{pts !== 1 ? "s" : ""}</span>
                                 </li>
                             );
                         })}

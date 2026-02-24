@@ -12,6 +12,14 @@ interface AuthPayload {
     username: string;
 }
 
+// ── Round carry-over (between rounds of the same game) ─────────────────────
+interface RoundCarryOver {
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    playerNames: Record<string, string>;
+}
+
 // ── Memory game types (server-only) ────────────────────────────────────────
 interface MemoryCard {
     id: number;
@@ -21,45 +29,45 @@ interface MemoryCard {
 }
 
 interface MemoryGameState {
-    phase: "picking1" | "picking2" | "revealing" | "ended";
+    phase: "picking1" | "picking2" | "revealing" | "roundEnd" | "ended";
     currentTurnId: string;
     firstFlippedIndex: number;
     cards: MemoryCard[];
     scores: Record<string, number>;
-    turnDeadline: number;                   // ms timestamp, 0 = no timer
-    playerNames: Record<string, string>;    // sessionId → username (snapshot at start)
+    turnDeadline: number;
+    playerNames: Record<string, string>;
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
 }
 
 // ── Tron game types (server-only) ──────────────────────────────────────────
-interface TronGameState {
-    phase: "playing" | "ended";
-    mode: "Tron" | "Snake";
-    gridSize: number;
-    grid: string;                          // gridSize² chars: '.' or '0'-'3'
-    players: Record<string, TronPlayer>;
-    playerOrder: string[];                 // sessionIds → indices 0-3
-    apples: { x: number; y: number }[];   // Snake only
-    playerNames: Record<string, string>;
-}
 interface TronPlayer {
     x: number; y: number;
     dir: "up" | "down" | "left" | "right";
     alive: boolean; eliminated: boolean;
     color: string; score: number;
+    eliminatedAt: number; // tick when eliminated (0 = still alive)
+}
+
+interface TronGameState {
+    phase: "playing" | "roundEnd" | "ended";
+    mode: "Tron" | "Snake";
+    gridSize: number;
+    grid: string;
+    players: Record<string, TronPlayer>;
+    playerOrder: string[];
+    apples: { x: number; y: number }[];
+    playerNames: Record<string, string>;
+    tick: number;
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
 }
 
 // ── Bomberman game types (server-only) ─────────────────────────────────────
-interface BombermanGameState {
-    phase: "playing" | "ended";
-    cols: number; rows: number; // 13×11
-    grid: string;               // cols*rows chars: '0'=empty, '1'=wall, '2'=block
-    players: Record<string, BombermanPlayer>;
-    playerOrder: string[];
-    bombs: BombBM[];
-    explosions: ExplosionBM[];
-    bonuses: BonusBM[];
-    playerNames: Record<string, string>;
-}
 interface BombermanPlayer {
     x: number; y: number;
     alive: boolean; eliminated: boolean;
@@ -68,7 +76,26 @@ interface BombermanPlayer {
     range: number;
     shield: boolean; invincibleTicks: number;
     color: string;
+    eliminatedAt: number; // tick when eliminated (0 = still alive)
 }
+
+interface BombermanGameState {
+    phase: "playing" | "roundEnd" | "ended";
+    cols: number; rows: number;
+    grid: string;
+    players: Record<string, BombermanPlayer>;
+    playerOrder: string[];
+    bombs: BombBM[];
+    explosions: ExplosionBM[];
+    bonuses: BonusBM[];
+    playerNames: Record<string, string>;
+    tick: number;
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
+}
+
 interface BombBM { id: number; x: number; y: number; ownerId: string; fuseLeft: number; range: number; }
 interface ExplosionBM { cells: { x: number; y: number }[]; ticksLeft: number; }
 interface BonusBM { x: number; y: number; type: "bomb" | "range" | "shield"; }
@@ -85,22 +112,17 @@ const TRON_GRID_SIZES: Record<string, number> = { Petite: 20, Moyenne: 30, Grand
 const TRON_COLORS = ["#00e5ff", "#ff1744", "#76ff03", "#ff6d00"];
 const SNAKE_APPLE_COUNT = 3;
 
-const BOMB_COLS = 13, BOMB_ROWS = 11;
 const BOMB_TICK_MS = 150;
 const FUSE_TICKS = 20;
 const EXPLOSION_TICKS = 5;
 const INVINCIBLE_TICKS = 8;
 const BONUS_DROP_RATE = 0.3;
-const SPAWN_CORNERS = [[0, 0], [12, 0], [0, 10], [12, 10]];
-// offsets safe from each corner (col-offset, row-offset)
 const SPAWN_SAFE_OFFSETS = [[1, 0], [0, 1], [1, 1]];
 
 export class LobbyRoom extends Room<{ state: LobbyState }> {
     maxClients = 8;
 
-    // playerId → sessionId (active connections only)
     private playerIdMap = new Map<number, string>();
-    // sessionId → playerId (reverse lookup for cleanup)
     private sessionToPlayerId = new Map<string, number>();
 
     private currentTurnTimer: { clear(): void } | null = null;
@@ -115,6 +137,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     private bombIdCounter = 0;
 
     private gameSimInterval: { clear(): void } | null = null;
+
+    // Round carry-over between rounds of the same game session
+    private prevRound: RoundCarryOver | null = null;
 
     onCreate(_options: Record<string, unknown>) {
         this.setState(new LobbyState());
@@ -169,23 +194,18 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} left (code: ${code})`);
 
         if (this.state.isStarted && code !== CloseCode.CONSENTED) {
-            // Unexpected disconnect during game → attempt reconnection
             leaving.isConnected = false;
             try {
                 await this.allowReconnection(client, 30);
-                // Successfully reconnected
                 leaving.isConnected = true;
                 console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} reconnected`);
             } catch {
-                // Timeout — eliminate player
                 console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} reconnection timed out, eliminating`);
                 this.eliminatePlayer(client.sessionId);
             }
         } else if (this.state.isStarted && code === CloseCode.CONSENTED) {
-            // Voluntary leave during game → eliminate immediately
             this.eliminatePlayer(client.sessionId);
         } else {
-            // Lobby phase — standard removal
             this.removePlayer(client.sessionId, leaving);
         }
     }
@@ -228,7 +248,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         player.isEliminated = true;
         player.isConnected = false;
 
-        // Free the playerId slot so the player can potentially rejoin as spectator
         const playerId = this.sessionToPlayerId.get(sessionId);
         if (playerId) {
             this.playerIdMap.delete(playerId);
@@ -256,7 +275,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             return;
         }
 
-        if (gs.phase === "ended") return;
+        if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
         const wasTheirTurn = gs.currentTurnId === sessionId;
 
@@ -265,10 +284,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 if (c.isFlipped && !c.isMatched) c.isFlipped = false;
             });
             gs.firstFlippedIndex = -1;
-            this.nextTurn(gs);
 
-            if ((gs as MemoryGameState).phase === "ended") {
-                this.clearTurnTimer();
+            if (this.nextTurn(gs)) {
+                this.endMemoryRound(gs);
                 this.state.gameStateJson = JSON.stringify(gs);
                 return;
             }
@@ -284,8 +302,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }).length;
 
         if (activeCount === 0) {
-            gs.phase = "ended";
-            this.clearTurnTimer();
+            this.endMemoryRound(gs);
+            this.state.gameStateJson = JSON.stringify(gs);
+            return;
         }
 
         this.state.gameStateJson = JSON.stringify(gs);
@@ -298,19 +317,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         } catch {
             return;
         }
-        if (gs.phase === "ended") return;
+        if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
         const p = gs.players[sessionId];
         if (p) {
             p.alive = false;
             p.eliminated = true;
+            p.eliminatedAt = gs.tick ?? 0;
         }
 
-        const aliveCount = Object.values(gs.players).filter((pl) => pl.alive).length;
-        if (aliveCount <= 1) {
-            gs.phase = "ended";
-            this.stopGameLoop();
-        }
+        this.checkTronRoundEnd(gs);
         this.state.gameStateJson = JSON.stringify(gs);
     }
 
@@ -321,38 +337,127 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         } catch {
             return;
         }
-        if (gs.phase === "ended") return;
+        if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
         const p = gs.players[sessionId];
         if (p) {
             p.lives = 0;
             p.alive = false;
             p.eliminated = true;
+            p.eliminatedAt = gs.tick ?? 0;
         }
 
-        const aliveCount = Object.values(gs.players).filter((pl) => pl.alive).length;
-        if (aliveCount <= 1) {
-            gs.phase = "ended";
-            this.stopGameLoop();
-        }
+        this.checkBombermanRoundEnd(gs);
         this.state.gameStateJson = JSON.stringify(gs);
+    }
+
+    // ── Victory helpers ──────────────────────────────────────────────────────
+
+    // Memory: most pairs wins; tie if equal
+    private calcMemoryWinners(gs: MemoryGameState): string[] {
+        const entries = Object.entries(gs.scores);
+        if (entries.length === 0) return [];
+        const maxScore = Math.max(...entries.map(([, v]) => v));
+        return entries.filter(([, v]) => v === maxScore).map(([id]) => id);
+    }
+
+    // Ends a Memory round: awards roundPoints, advances phase
+    private endMemoryRound(gs: MemoryGameState): void {
+        const winners = this.calcMemoryWinners(gs);
+        gs.roundWinnerIds = winners;
+        // Single winner gets 1 point; ties award nothing
+        if (winners.length === 1) {
+            const wId = winners[0]!;
+            gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
+        }
+        gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        this.clearTurnTimer();
+    }
+
+    // Tron: last alive wins; Snake tie-break = most apples
+    private calcTronWinners(gs: TronGameState): string[] {
+        const { players, playerOrder, mode } = gs;
+        const alive = playerOrder.filter(id => players[id]?.alive);
+
+        if (alive.length === 1) return alive;
+
+        if (alive.length > 1) {
+            // Multiple still alive (can happen in Snake if rounds end externally)
+            if (mode === "Snake") {
+                const maxScore = Math.max(...alive.map(id => players[id]?.score ?? 0));
+                return alive.filter(id => (players[id]?.score ?? 0) === maxScore);
+            }
+            return alive; // Tron tie
+        }
+
+        // All dead: who survived longest (highest eliminatedAt)?
+        const allIds = playerOrder.filter(id => players[id]);
+        if (allIds.length === 0) return [];
+        const maxElimAt = Math.max(...allIds.map(id => players[id]?.eliminatedAt ?? 0));
+        const lastDied = allIds.filter(id => (players[id]?.eliminatedAt ?? 0) === maxElimAt);
+
+        if (mode === "Snake" && lastDied.length > 1) {
+            const maxScore = Math.max(...lastDied.map(id => players[id]?.score ?? 0));
+            return lastDied.filter(id => (players[id]?.score ?? 0) === maxScore);
+        }
+        return lastDied;
+    }
+
+    // Returns true if the round ended (≤1 alive)
+    private checkTronRoundEnd(gs: TronGameState): boolean {
+        const aliveCount = Object.values(gs.players).filter(p => p.alive).length;
+        if (aliveCount > 1) return false;
+
+        const winners = this.calcTronWinners(gs);
+        gs.roundWinnerIds = winners;
+        if (winners.length === 1) {
+            const wId = winners[0]!;
+            gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
+        }
+        gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        this.stopGameLoop();
+        return true;
+    }
+
+    // Bomberman: last alive wins; tie by eliminatedAt
+    private checkBombermanRoundEnd(gs: BombermanGameState): boolean {
+        const aliveCount = Object.values(gs.players).filter(p => p.alive).length;
+        if (aliveCount > 1) return false;
+
+        const alive = gs.playerOrder.filter(id => gs.players[id]?.alive);
+        let winners: string[];
+        if (alive.length >= 1) {
+            winners = alive; // 1 survivor (or edge case: multiple alive at aliveCount check)
+        } else {
+            // All eliminated: last one out wins
+            const maxElimAt = Math.max(...gs.playerOrder.map(id => gs.players[id]?.eliminatedAt ?? 0));
+            winners = gs.playerOrder.filter(id => (gs.players[id]?.eliminatedAt ?? 0) === maxElimAt);
+        }
+
+        gs.roundWinnerIds = winners;
+        if (winners.length === 1) {
+            const wId = winners[0]!;
+            gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
+        }
+        gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        this.stopGameLoop();
+        return true;
     }
 
     // ── Memory helpers ───────────────────────────────────────────────────────
 
-    private nextTurn(state: MemoryGameState) {
+    // Returns true if no more active players (round should end)
+    private nextTurn(state: MemoryGameState): boolean {
         const playerIds = Object.keys(state.scores).filter((id) => {
             const p = this.state.players.get(id);
             return p && !p.isEliminated;
         });
 
-        if (playerIds.length === 0) {
-            state.phase = "ended";
-            return;
-        }
+        if (playerIds.length === 0) return true;
 
         const idx = playerIds.indexOf(state.currentTurnId);
-        state.currentTurnId = playerIds[(idx + 1) % playerIds.length] ?? playerIds[0];
+        state.currentTurnId = playerIds[(idx + 1) % playerIds.length] ?? playerIds[0]!;
+        return false;
     }
 
     private startTurnTimer(gameState: MemoryGameState) {
@@ -379,16 +484,15 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 return;
             }
 
-            if (gs.phase === "ended") return;
+            if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
             gs.cards.forEach((c) => {
                 if (c.isFlipped && !c.isMatched) c.isFlipped = false;
             });
             gs.firstFlippedIndex = -1;
-            this.nextTurn(gs);
 
-            if ((gs as MemoryGameState).phase === "ended") {
-                this.clearTurnTimer();
+            if (this.nextTurn(gs)) {
+                this.endMemoryRound(gs);
                 this.state.gameStateJson = JSON.stringify(gs);
                 return;
             }
@@ -409,6 +513,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
         const pairs = parseInt(String(options["pairs"] ?? "12"), 10);
 
+        const roundCarryOver = this.prevRound;
+        this.prevRound = null;
+        const currentRound = roundCarryOver?.currentRound ?? 1;
+        const maxRounds = roundCarryOver?.maxRounds ?? parseInt(String(options["rounds"] ?? "1"), 10);
+        const roundPoints: Record<string, number> = { ...(roundCarryOver?.roundPoints ?? {}) };
+        const existingPlayerNames: Record<string, string> = roundCarryOver?.playerNames ?? {};
+
         const symbolIndices = Array.from({ length: SYMBOLS.length }, (_, i) => i);
         const shuffled = symbolIndices.sort(() => Math.random() - 0.5).slice(0, pairs);
         const deck = [...shuffled, ...shuffled].sort(() => Math.random() - 0.5);
@@ -418,13 +529,18 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }));
 
         const scores: Record<string, number> = {};
-        const playerNames: Record<string, string> = {};
+        const playerNames: Record<string, string> = { ...existingPlayerNames };
+
         this.state.players.forEach((p, sessionId) => {
-            scores[sessionId] = 0;
             playerNames[sessionId] = p.username;
+            if (!p.isEliminated) {
+                scores[sessionId] = 0;
+            }
         });
 
-        const playerIds = Array.from(this.state.players.keys());
+        const playerIds = Array.from(this.state.players.keys())
+            .filter(id => !this.state.players.get(id)?.isEliminated);
+
         const initialState: MemoryGameState = {
             phase: "picking1",
             currentTurnId: playerIds[0] ?? "",
@@ -433,6 +549,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             scores,
             playerNames,
             turnDeadline: 0,
+            currentRound,
+            maxRounds,
+            roundPoints,
+            roundWinnerIds: [],
         };
 
         this.startTurnTimer(initialState);
@@ -448,6 +568,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const gridSize = TRON_GRID_SIZES[mapSizeKey] ?? 30;
         const tickMs = TRON_SPEED_MS[speedIndex] ?? 120;
 
+        const roundCarryOver = this.prevRound;
+        this.prevRound = null;
+        const currentRound = roundCarryOver?.currentRound ?? 1;
+        const maxRounds = roundCarryOver?.maxRounds ?? parseInt(String(options["rounds"] ?? "1"), 10);
+        const roundPoints: Record<string, number> = { ...(roundCarryOver?.roundPoints ?? {}) };
+        const existingPlayerNames: Record<string, string> = roundCarryOver?.playerNames ?? {};
+
         const gs = gridSize;
         const startPositions: Array<{ x: number; y: number; dir: TronPlayer["dir"] }> = [
             { x: 2,      y: 2,      dir: "right" },
@@ -456,10 +583,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             { x: 2,      y: gs - 3, dir: "up" },
         ];
 
-        const playerIds = Array.from(this.state.players.keys());
+        const playerIds = Array.from(this.state.players.keys())
+            .filter(id => !this.state.players.get(id)?.isEliminated);
         const playerOrder: string[] = [];
         const players: Record<string, TronPlayer> = {};
-        const playerNames: Record<string, string> = {};
+        const playerNames: Record<string, string> = { ...existingPlayerNames };
 
         const grid = Array(gridSize * gridSize).fill(".");
 
@@ -479,12 +607,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 alive: true, eliminated: false,
                 color: TRON_COLORS[i]!,
                 score: 0,
+                eliminatedAt: 0,
             };
 
             this.tronDirs.set(sessionId, sp.dir);
 
             if (mode === "Snake") {
-                // Initial trail: 3 cells behind the starting position
                 const trail: number[] = [];
                 const dxMap = { right: -1, left: 1, up: 0, down: 0 };
                 const dyMap = { right: 0, left: 0, up: 1, down: -1 };
@@ -501,7 +629,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 }
                 this.snakeTrails.set(sessionId, trail);
             } else {
-                // Tron: just mark starting cell
                 grid[sp.y * gridSize + sp.x] = String(i);
             }
         });
@@ -523,6 +650,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             playerOrder,
             apples,
             playerNames,
+            tick: 0,
+            currentRound,
+            maxRounds,
+            roundPoints,
+            roundWinnerIds: [],
         };
 
         this.state.gameStateJson = JSON.stringify(gameState);
@@ -545,7 +677,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             gs = JSON.parse(this.state.gameStateJson) as TronGameState;
         } catch { return; }
 
-        if (gs.phase === "ended") { this.stopGameLoop(); return; }
+        if (gs.phase !== "playing") { this.stopGameLoop(); return; }
+
+        gs.tick = (gs.tick ?? 0) + 1;
 
         const grid = gs.grid.split("");
         const { gridSize, mode } = gs;
@@ -558,7 +692,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             up: "down", down: "up", left: "right", right: "left",
         };
 
-        const applesEaten = new Set<number>(); // apple indices eaten this tick
+        const applesEaten = new Set<number>();
 
         for (const [sessionId, p] of Object.entries(gs.players)) {
             if (!p.alive) continue;
@@ -575,10 +709,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
             if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize || grid[ny * gridSize + nx] !== ".") {
                 p.alive = false;
+                p.eliminatedAt = gs.tick;
                 continue;
             }
 
-            // Move
             const newIdx = ny * gridSize + nx;
             grid[newIdx] = String(pIdx);
 
@@ -586,7 +720,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 const trail = this.snakeTrails.get(sessionId) ?? [];
                 trail.unshift(newIdx);
 
-                // Check apple
                 let ateApple = false;
                 for (let ai = 0; ai < gs.apples.length; ai++) {
                     const apple = gs.apples[ai]!;
@@ -609,7 +742,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             p.y = ny;
         }
 
-        // Respawn eaten apples (Snake)
         if (mode === "Snake" && applesEaten.size > 0) {
             const remaining = gs.apples.filter((_, i) => !applesEaten.has(i));
             gs.apples = remaining;
@@ -621,12 +753,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         gs.grid = grid.join("");
 
-        const aliveCount = Object.values(gs.players).filter((p) => p.alive).length;
-        if (aliveCount <= 1) {
-            gs.phase = "ended";
-            this.stopGameLoop();
-        }
-
+        this.checkTronRoundEnd(gs);
         this.state.gameStateJson = JSON.stringify(gs);
     }
 
@@ -637,8 +764,14 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const lives      = Math.min(5, Math.max(1, parseInt(String(options["lives"]      ?? "3"), 10)));
         const bombCount  = Math.min(3, Math.max(1, parseInt(String(options["bombCount"]  ?? "1"), 10)));
         const bombRange  = Math.min(4, Math.max(1, parseInt(String(options["bombRange"]  ?? "2"), 10)));
-        const powerUps   = options["powerUps"] !== false;
         const mapSizeKey = String(options["mapSize"] ?? "Normale");
+
+        const roundCarryOver = this.prevRound;
+        this.prevRound = null;
+        const currentRound = roundCarryOver?.currentRound ?? 1;
+        const maxRounds = roundCarryOver?.maxRounds ?? parseInt(String(options["rounds"] ?? "1"), 10);
+        const roundPoints: Record<string, number> = { ...(roundCarryOver?.roundPoints ?? {}) };
+        const existingPlayerNames: Record<string, string> = roundCarryOver?.playerNames ?? {};
 
         const MAP_SIZES: Record<string, [number, number]> = {
             Petite:  [11, 9],
@@ -647,14 +780,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         };
         const [cols, rows] = MAP_SIZES[mapSizeKey] ?? [13, 11];
 
-        // Spawn corners dynamic (always the 4 actual corners)
         const spawnCorners = [[0, 0], [cols - 1, 0], [0, rows - 1], [cols - 1, rows - 1]];
 
         const grid: string[] = [];
 
         for (let y = 0; y < rows; y++) {
             for (let x = 0; x < cols; x++) {
-                // Fixed walls at even interior positions
                 if (x > 0 && y > 0 && x < cols - 1 && y < rows - 1 && x % 2 === 0 && y % 2 === 0) {
                     grid.push("1");
                 } else {
@@ -663,7 +794,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
         }
 
-        // Force spawn zones clear (corner + adjacent cells)
         for (const [cx, cy] of spawnCorners) {
             const cornerIdx = cy! * cols + cx!;
             grid[cornerIdx] = "0";
@@ -676,14 +806,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
         }
 
-        // Fill destructible blocks (60% of remaining empty cells)
         for (let i = 0; i < grid.length; i++) {
             if (grid[i] === "0" && Math.random() < 0.6) {
                 grid[i] = "2";
             }
         }
 
-        // Force spawn corners clear again after random fill
         for (const [cx, cy] of spawnCorners) {
             const cornerIdx = cy! * cols + cx!;
             grid[cornerIdx] = "0";
@@ -697,10 +825,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
 
         const bombermanColors = ["#00e5ff", "#ff1744", "#76ff03", "#ff6d00"];
-        const playerIds = Array.from(this.state.players.keys());
+        const playerIds = Array.from(this.state.players.keys())
+            .filter(id => !this.state.players.get(id)?.isEliminated);
         const playerOrder: string[] = [];
         const players: Record<string, BombermanPlayer> = {};
-        const playerNames: Record<string, string> = {};
+        const playerNames: Record<string, string> = { ...existingPlayerNames };
 
         this.bombermanDirs.clear();
         this.bombermanBombsPending.clear();
@@ -723,6 +852,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 range: bombRange,
                 shield: false, invincibleTicks: 0,
                 color: bombermanColors[i]!,
+                eliminatedAt: 0,
             };
             this.bombermanDirs.set(sessionId, null);
         });
@@ -737,6 +867,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             explosions: [],
             bonuses: [],
             playerNames,
+            tick: 0,
+            currentRound,
+            maxRounds,
+            roundPoints,
+            roundWinnerIds: [],
         };
 
         this.state.gameStateJson = JSON.stringify(gs);
@@ -749,7 +884,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             gs = JSON.parse(this.state.gameStateJson) as BombermanGameState;
         } catch { return; }
 
-        if (gs.phase === "ended") { this.stopGameLoop(); return; }
+        if (gs.phase !== "playing") { this.stopGameLoop(); return; }
+
+        gs.tick = (gs.tick ?? 0) + 1;
 
         const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
         const powerUps = options["powerUps"] !== false;
@@ -774,7 +911,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
             const cell = grid[ny * cols + nx];
             if (cell === "1" || cell === "2") continue;
-            // Check if a bomb is blocking
             const bombBlocking = gs.bombs.some((b) => b.x === nx && b.y === ny);
             if (bombBlocking) continue;
 
@@ -814,7 +950,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
         }
 
-        // Process explosions (chain reactions included)
         const toExplode = [...explodingBombs];
         const explodedIds = new Set<number>();
 
@@ -837,12 +972,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                     const cellIdx = ey * cols + ex;
                     const cell = grid[cellIdx]!;
 
-                    if (cell === "1") break; // solid wall stops blast
+                    if (cell === "1") break;
 
                     cells.push({ x: ex, y: ey });
 
                     if (cell === "2") {
-                        // Destroy block
                         grid[cellIdx] = "0";
                         if (powerUps && Math.random() < BONUS_DROP_RATE) {
                             const types: BonusBM["type"][] = ["bomb", "range", "shield"];
@@ -854,7 +988,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                         break;
                     }
 
-                    // Check chain reaction — trigger other bombs in blast radius
                     const chainBomb = newBombs.find((b) => b.x === ex && b.y === ey);
                     if (chainBomb) {
                         newBombs.splice(newBombs.indexOf(chainBomb), 1);
@@ -890,10 +1023,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                     if (p.lives <= 0) {
                         p.alive = false;
                         p.eliminated = true;
+                        p.eliminatedAt = gs.tick;
                         if (lp) { lp.isEliminated = true; lp.isConnected = false; }
                     } else {
                         p.invincibleTicks = INVINCIBLE_TICKS;
-                        // Respawn at player's corner (derived from map size)
                         const pi = gs.playerOrder.indexOf(sessionId);
                         const dynamicCorners = [[0, 0], [gs.cols - 1, 0], [0, gs.rows - 1], [gs.cols - 1, gs.rows - 1]];
                         const corner = dynamicCorners[pi] ?? dynamicCorners[0]!;
@@ -931,15 +1064,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         gs.bonuses = remainingBonuses;
 
         // ── 7. Win check ─────────────────────────────────────────────────────
-        const aliveCount = Object.values(gs.players).filter((p) => p.alive).length;
-        if (aliveCount <= 1) {
-            // Award win point to survivor
-            for (const p of Object.values(gs.players)) {
-                if (p.alive) p.score++;
-            }
-            gs.phase = "ended";
-            this.stopGameLoop();
-        }
+        this.checkBombermanRoundEnd(gs);
 
         this.state.gameStateJson = JSON.stringify(gs);
     }
@@ -988,6 +1113,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
             this.clearTurnTimer();
             this.stopGameLoop();
+            this.prevRound = null;
             this.state.isStarted = false;
             this.state.status = "lobby";
             this.state.gameStateJson = "{}";
@@ -1000,12 +1126,44 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             console.log(`[LobbyRoom ${this.roomId}] host returned everyone to lobby`);
         },
 
+        nextRound: (client: Client) => {
+            if (client.sessionId !== this.state.hostId) return;
+            if (this.state.status !== "game") return;
+
+            let gs: { phase?: string; currentRound?: number; maxRounds?: number; roundPoints?: Record<string, number>; playerNames?: Record<string, string> };
+            try {
+                gs = JSON.parse(this.state.gameStateJson) as typeof gs;
+            } catch { return; }
+
+            if (gs.phase !== "roundEnd") return;
+
+            this.prevRound = {
+                currentRound: (gs.currentRound ?? 1) + 1,
+                maxRounds: gs.maxRounds ?? 1,
+                roundPoints: gs.roundPoints ?? {},
+                playerNames: gs.playerNames ?? {},
+            };
+
+            this.stopGameLoop();
+
+            const slug = this.state.selectedGameSlug;
+            if (slug === "memory") {
+                this.clearTurnTimer();
+                this.initMemory();
+            } else if (slug === "tron") {
+                this.initTron();
+            } else if (slug === "bomberman") {
+                this.initBomberman();
+            }
+        },
+
         start: (client: Client) => {
             if (client.sessionId !== this.state.hostId) return;
             if (!this.state.selectedGameSlug) return;
             if (this.state.players.size < 1) return;
             if (this.state.isStarted) return;
 
+            this.prevRound = null;
             this.state.isStarted = true;
 
             const slug = this.state.selectedGameSlug;
@@ -1038,7 +1196,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
             const { phase, currentTurnId, cards } = gameState;
 
-            if (phase === "revealing" || phase === "ended") return;
+            if (phase === "revealing" || phase === "ended" || phase === "roundEnd") return;
             if (client.sessionId !== currentTurnId) return;
 
             const index = data.index;
@@ -1067,8 +1225,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
                     const allMatched = cards.every((c) => c.isMatched);
                     if (allMatched) {
-                        gameState.phase = "ended";
-                        this.clearTurnTimer();
+                        this.endMemoryRound(gameState);
                         this.state.gameStateJson = JSON.stringify(gameState);
                     } else {
                         gameState.phase = "picking1";
@@ -1098,9 +1255,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                         const c2 = gs.cards.find((c) => c.id === firstCardId);
                         if (c1 && !c1.isMatched) c1.isFlipped = false;
                         if (c2 && !c2.isMatched) c2.isFlipped = false;
-                        this.nextTurn(gs);
 
-                        if ((gs as MemoryGameState).phase === "ended") {
+                        if (this.nextTurn(gs)) {
+                            this.endMemoryRound(gs);
                             this.state.gameStateJson = JSON.stringify(gs);
                             return;
                         }

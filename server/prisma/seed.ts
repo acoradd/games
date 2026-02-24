@@ -15,6 +15,7 @@ async function main() {
                 speed:   { type: "range",  min: 1, max: 5, default: 3,        label: "Vitesse" },
                 mapSize: { type: "select", options: ["Petite", "Moyenne", "Grande"], default: "Moyenne", label: "Carte" },
                 mode:    { type: "select", options: ["Tron", "Snake"], default: "Tron", label: "Mode" },
+                rounds:  { type: "select", options: ["1", "3", "5", "7"], default: "1", label: "Manches" },
             },
         },
         {
@@ -30,6 +31,7 @@ async function main() {
                 bombRange:  { type: "range",  min: 1, max: 4, default: 2,          label: "Portée initiale" },
                 mapSize:    { type: "select", options: ["Petite", "Normale", "Grande"], default: "Normale", label: "Carte" },
                 powerUps:   { type: "toggle", default: true,                       label: "Power-ups" },
+                rounds:     { type: "select", options: ["1", "3", "5", "7"], default: "1", label: "Manches" },
             },
         },
         {
@@ -42,6 +44,7 @@ async function main() {
             options: {
                 pairs:        { type: "select", options: ["8", "12", "16", "24"],        default: "12", label: "Nombre de paires" },
                 turnTimeout:  { type: "select", options: ["10", "15", "30", "60", "0"], default: "30", label: "Temps par tour (s, 0=∞)" },
+                rounds:       { type: "select", options: ["1", "3", "5", "7"], default: "1", label: "Manches" },
             },
         },
         {
@@ -54,6 +57,7 @@ async function main() {
             options: {
                 wordLength: { type: "range", min: 5, max: 8, default: 6,  label: "Longueur du mot" },
                 timeLimit:  { type: "range", min: 30, max: 120, default: 60, step: 10, label: "Temps (s)" },
+                rounds:     { type: "select", options: ["1", "3", "5", "7"], default: "1", label: "Manches" },
             },
         },
     ];

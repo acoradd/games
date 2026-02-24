@@ -52,7 +52,7 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
     const { phase, currentTurnId, cards, scores, turnDeadline, playerNames } = gameState;
 
     const isMyTurn = sessionId === currentTurnId;
-    const canInteract = isMyTurn && phase !== "revealing" && phase !== "ended";
+    const canInteract = isMyTurn && phase !== "revealing" && phase !== "ended" && phase !== "roundEnd";
     const isHost = players.find((p) => p.id === sessionId)?.isHost ?? false;
 
     // ── Turn countdown ──────────────────────────────────────────────────────
@@ -76,14 +76,45 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
 
     const colsClass = cards.length > 16 ? "grid-cols-6" : "grid-cols-4";
 
-    // ── Scoreboard — built from playerNames snapshot ────────────────────────
+    // All participant IDs (from playerNames snapshot, includes eliminated)
     const participantIds = Object.keys(playerNames ?? {});
-    const ranked = [...participantIds].sort(
-        (a, b) => (scores[b] ?? 0) - (scores[a] ?? 0)
+    // Current round scoreboard: sorted by pairs found
+    const ranked = [...participantIds].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0));
+    // Final standings: sorted by roundPoints
+    const rankedByPoints = [...participantIds].sort(
+        (a, b) => (gameState.roundPoints[b] ?? 0) - (gameState.roundPoints[a] ?? 0)
     );
 
     const currentPlayer = players.find((p) => p.id === currentTurnId);
     const playerById = new Map(players.map((p) => [p.id, p]));
+
+    const roundWinnerIds = gameState.roundWinnerIds ?? [];
+    const roundWinnerName = roundWinnerIds.length === 1
+        ? (playerNames[roundWinnerIds[0]!] ?? roundWinnerIds[0])
+        : null;
+
+    const pointsStandings = (
+        <ul className="flex flex-col gap-1 mb-4 text-left">
+            {rankedByPoints.map((id) => {
+                const p = playerById.get(id);
+                const pts = gameState.roundPoints[id] ?? 0;
+                const isMe = id === sessionId;
+                const isEliminated = p?.isEliminated ?? false;
+                const isWinner = roundWinnerIds.includes(id);
+                return (
+                    <li key={id} className="flex items-center justify-between text-sm">
+                        <span className={`flex items-center gap-1 ${isEliminated ? "line-through text-gray-600" : ""}`}>
+                            <span className={isWinner && phase === "roundEnd" ? "text-indigo-300 font-semibold" : "text-gray-300"}>
+                                {playerNames[id] ?? id}
+                                {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                            </span>
+                        </span>
+                        <span className="font-bold text-white">{pts} pt{pts !== 1 ? "s" : ""}</span>
+                    </li>
+                );
+            })}
+        </ul>
+    );
 
     // ── Render ────────────────────────────────────────────────────────────
     return (
@@ -98,8 +129,13 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
                 <>
                     <span className="text-xl">🃏</span>
                     <span className="font-bold text-white">Memory</span>
+                    {gameState.maxRounds > 1 && (
+                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
+                            Manche {gameState.currentRound}/{gameState.maxRounds}
+                        </span>
+                    )}
                     <span className="text-gray-600 text-sm">|</span>
-                    {phase !== "ended" && (
+                    {phase !== "ended" && phase !== "roundEnd" && (
                         <span className="text-sm text-gray-400 flex items-center gap-2">
                             {isMyTurn
                                 ? <span className="text-violet-400 font-semibold">Votre tour</span>
@@ -116,7 +152,9 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
             }
             scoreboard={
                 <>
-                    <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">Scores</p>
+                    <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">
+                        {gameState.maxRounds > 1 ? "Points" : "Scores"}
+                    </p>
                     <ul className="flex flex-col gap-2">
                         {ranked.map((id) => {
                             const name = playerNames[id] ?? id;
@@ -125,6 +163,7 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
                             const isEliminated = p?.isEliminated ?? false;
                             const isConnected = p?.isConnected ?? true;
                             const isMe = id === sessionId;
+                            const pts = gameState.roundPoints[id] ?? 0;
 
                             return (
                                 <li
@@ -145,7 +184,11 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
                                         {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
                                         {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
                                     </span>
-                                    <span className="font-bold shrink-0">{scores[id] ?? 0}</span>
+                                    {gameState.maxRounds > 1 ? (
+                                        <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>
+                                    ) : (
+                                        <span className="font-bold shrink-0">{scores[id] ?? 0}</span>
+                                    )}
                                 </li>
                             );
                         })}
@@ -155,28 +198,52 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
                     </p>
                 </>
             }
+            roundEndContent={
+                <>
+                    <p className="text-2xl mb-2">🃏</p>
+                    <h2 className="text-lg font-bold text-white mb-1">
+                        Manche {gameState.currentRound}/{gameState.maxRounds} terminée !
+                    </h2>
+                    {roundWinnerName ? (
+                        <>
+                            <p className="text-indigo-400 font-semibold">🏆 {roundWinnerName}</p>
+                            <p className="text-gray-500 text-xs mb-4">
+                                {scores[roundWinnerIds[0]!] ?? 0} paire{(scores[roundWinnerIds[0]!] ?? 0) > 1 ? "s" : ""} trouvée{(scores[roundWinnerIds[0]!] ?? 0) > 1 ? "s" : ""}
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-gray-400 mb-4">Égalité !</p>
+                    )}
+                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-2">Classement général</p>
+                    {pointsStandings}
+                </>
+            }
             endContent={
                 <>
                     <p className="text-3xl mb-2">🏆</p>
                     <h2 className="text-xl font-bold text-white mb-1">Partie terminée !</h2>
-                    <p className="text-gray-400 text-sm mb-6">Classement final</p>
+                    <p className="text-gray-400 text-sm mb-4">
+                        {gameState.maxRounds > 1 ? `${gameState.maxRounds} manches jouées` : "Classement final"}
+                    </p>
                     <ul className="flex flex-col gap-2 mb-4">
-                        {ranked.map((id, i) => {
-                            const name = playerNames[id] ?? id;
+                        {rankedByPoints.map((id, i) => {
                             const p = playerById.get(id);
                             const isEliminated = p?.isEliminated ?? false;
+                            const pts = gameState.roundPoints[id] ?? 0;
                             const isMe = id === sessionId;
+                            const maxPts = gameState.roundPoints[rankedByPoints[0]!] ?? 0;
+                            const isChampion = pts === maxPts && maxPts > 0;
                             return (
                                 <li key={id} className="flex items-center justify-between text-sm">
                                     <span className="flex items-center gap-2">
                                         <span className="text-gray-500 w-4">{i + 1}.</span>
-                                        <span className={`${isEliminated ? "line-through text-gray-500" : i === 0 ? "text-yellow-400 font-bold" : "text-gray-300"}`}>
-                                            {name}
+                                        <span className={`${isEliminated ? "line-through text-gray-500" : isChampion && i === 0 ? "text-yellow-400 font-bold" : "text-gray-300"}`}>
+                                            {playerNames[id] ?? id}
                                             {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
                                             {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
                                         </span>
                                     </span>
-                                    <span className="font-bold text-white">{scores[id] ?? 0} pts</span>
+                                    <span className="font-bold text-white">{pts} pt{pts !== 1 ? "s" : ""}</span>
                                 </li>
                             );
                         })}

@@ -32,13 +32,17 @@ export interface MemoryCard {
 }
 
 export interface MemoryGameState {
-    phase: "picking1" | "picking2" | "revealing" | "ended";
+    phase: "picking1" | "picking2" | "revealing" | "roundEnd" | "ended";
     currentTurnId: string;
     firstFlippedIndex: number;
     cards: MemoryCard[];
     scores: Record<string, number>;
     turnDeadline: number;
     playerNames: Record<string, string>;
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
 }
 
 export interface TronPlayer {
@@ -46,9 +50,10 @@ export interface TronPlayer {
     dir: "up" | "down" | "left" | "right";
     alive: boolean; eliminated: boolean;
     color: string; score: number;
+    eliminatedAt: number;
 }
 export interface TronGameState {
-    phase: "playing" | "ended";
+    phase: "playing" | "roundEnd" | "ended";
     mode: "Tron" | "Snake";
     gridSize: number;
     grid: string;
@@ -56,6 +61,11 @@ export interface TronGameState {
     playerOrder: string[];
     apples: { x: number; y: number }[];
     playerNames: Record<string, string>;
+    tick: number;
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
 }
 
 export interface BombermanPlayer {
@@ -65,12 +75,13 @@ export interface BombermanPlayer {
     bombsMax: number; bombsPlaced: number;
     range: number; shield: boolean; invincibleTicks: number;
     color: string;
+    eliminatedAt: number;
 }
 export interface BombBM { id: number; x: number; y: number; ownerId: string; fuseLeft: number; range: number; }
 export interface ExplosionBM { cells: { x: number; y: number }[]; ticksLeft: number; }
 export interface BonusBM { x: number; y: number; type: "bomb" | "range" | "shield"; }
 export interface BombermanGameState {
-    phase: "playing" | "ended";
+    phase: "playing" | "roundEnd" | "ended";
     cols: number; rows: number;
     grid: string;
     players: Record<string, BombermanPlayer>;
@@ -79,4 +90,9 @@ export interface BombermanGameState {
     explosions: ExplosionBM[];
     bonuses: BonusBM[];
     playerNames: Record<string, string>;
+    tick: number;
+    currentRound: number;
+    maxRounds: number;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
 }

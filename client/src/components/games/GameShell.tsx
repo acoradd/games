@@ -6,7 +6,7 @@ interface Props {
     room: Room<LobbyState>;
     chatMessages: ChatMsg[];
     myUsername: string;
-    /** "ended" déclenche l'overlay de fin */
+    /** "roundEnd" triggers the between-rounds overlay; "ended" triggers the final overlay */
     phase: string;
     isHost: boolean;
     /** Contenu de la balise <header> */
@@ -17,11 +17,13 @@ interface Props {
     gameScrollable?: boolean;
     /** Canvas games passent leur containerRef pour que le <main> serve d'ancre au ResizeObserver */
     containerRef?: React.RefObject<HTMLDivElement | null>;
-    /** Appelé quand l'onglet change — canvas games l'utilisent pour redessiner au retour sur "jeu" */
+    /** Appelé quand l'onglet change */
     onTabChange?: (tab: "jeu" | "scores" | "chat") => void;
-    /** Contenu du panneau latéral (scoreboard + éventuelle note de contrôles) */
+    /** Contenu du panneau latéral */
     scoreboard: React.ReactNode;
-    /** Contenu de la modale de fin (icône + titre + classement) — le bouton "Retour" est ajouté par GameShell */
+    /** Contenu de la modale de fin de manche (affiché quand phase === "roundEnd") — le bouton "Manche suivante" est ajouté par GameShell */
+    roundEndContent?: React.ReactNode;
+    /** Contenu de la modale de fin de partie (affiché quand phase === "ended") — le bouton "Retour" est ajouté par GameShell */
     endContent: React.ReactNode;
 }
 
@@ -29,7 +31,7 @@ export default function GameShell({
     room, chatMessages, myUsername, phase, isHost,
     header, children, gameScrollable = false,
     containerRef, onTabChange,
-    scoreboard, endContent,
+    scoreboard, roundEndContent, endContent,
 }: Props) {
     const [mobileTab, setMobileTab] = useState<"jeu" | "scores" | "chat">("jeu");
     const [chatInput, setChatInput] = useState("");
@@ -92,12 +94,10 @@ export default function GameShell({
                 {/* Panneau latéral */}
                 <aside className={`${mobileTab === "jeu" ? "hidden lg:flex" : "flex"} w-full lg:w-56 shrink-0 flex-col lg:border-l lg:border-gray-800`}>
 
-                    {/* Scoreboard — masqué sur mobile onglet "chat" */}
                     <div className={`${mobileTab === "chat" ? "hidden lg:block" : ""} p-4 border-b border-gray-800 shrink-0`}>
                         {scoreboard}
                     </div>
 
-                    {/* Chat — masqué sur mobile onglet "scores" */}
                     <div className={`${mobileTab === "scores" ? "hidden lg:flex" : "flex"} flex-col flex-1 min-h-0`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2 shrink-0">Chat</p>
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
@@ -142,7 +142,26 @@ export default function GameShell({
                 </aside>
             </div>
 
-            {/* Overlay de fin de partie */}
+            {/* Overlay fin de manche */}
+            {phase === "roundEnd" && roundEndContent && (
+                <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10">
+                    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 max-w-sm w-full mx-4 text-center">
+                        {roundEndContent}
+                        {isHost ? (
+                            <button
+                                onClick={() => room.send("nextRound")}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-lg transition-colors mt-2"
+                            >
+                                Manche suivante →
+                            </button>
+                        ) : (
+                            <p className="text-gray-500 text-sm mt-2">En attente de la manche suivante…</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Overlay fin de partie */}
             {phase === "ended" && (
                 <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10">
                     <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 max-w-sm w-full mx-4 text-center">
