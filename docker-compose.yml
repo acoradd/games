@@ -33,7 +33,7 @@ services:
     environment:
       API_URL: ${API_URL:-localhost:2567}
     ports:
-      - "80:80"
+      - "5010:80"
 
 volumes:
   pgdata:
