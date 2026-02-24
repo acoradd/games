@@ -18,7 +18,6 @@ export interface GameMode {
     description: string | null;
     minPlayers: number;
     maxPlayers: number;
-    thumbnailUrl: string | null;
     isActive: boolean;
     options: GameOptionsDefs | null;
     createdAt: string;

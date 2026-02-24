@@ -91,6 +91,7 @@ export interface BombermanGameState {
     bonuses: BonusBM[];
     playerNames: Record<string, string>;
     tick: number;
+    bombTickMs: number;
     currentRound: number;
     maxRounds: number;
     roundPoints: Record<string, number>;

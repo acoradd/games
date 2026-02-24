@@ -26,9 +26,10 @@ async function main() {
             maxPlayers: 4,
             isActive: true,
             options: {
-                lives:      { type: "range",  min: 1, max: 5, default: 3,          label: "Vies" },
+                lives:      { type: "range",  min: 1, max: 5, default: 1,          label: "Vies" },
                 bombCount:  { type: "range",  min: 1, max: 3, default: 1,          label: "Bombes initiales" },
                 bombRange:  { type: "range",  min: 1, max: 4, default: 2,          label: "Portée initiale" },
+                bombSpeed:  { type: "range",  min: 1, max: 5, default: 3,          label: "Vitesse des bombes" },
                 mapSize:    { type: "select", options: ["Petite", "Normale", "Grande"], default: "Normale", label: "Carte" },
                 powerUps:   { type: "toggle", default: true,                       label: "Power-ups" },
                 rounds:     { type: "select", options: ["1", "3", "5", "7"], default: "1", label: "Manches" },
@@ -55,8 +56,9 @@ async function main() {
             maxPlayers: 8,
             isActive: true,
             options: {
-                wordLength: { type: "range", min: 5, max: 8, default: 6,  label: "Longueur du mot" },
-                timeLimit:  { type: "range", min: 30, max: 120, default: 60, step: 10, label: "Temps (s)" },
+                minWordLength: { type: "range", min: 5, max: 16, default: 5,  label: "Longueur du mot" },
+                maxWordLength: { type: "range", min: 5, max: 16, default: 12,  label: "Longueur du mot" },
+                timeLimit:  { type: "select", options: ["30", "60", "90", "120", "0"], default: "0", label: "Temps (s, 0=∞)" },
                 rounds:     { type: "select", options: ["1", "3", "5", "7"], default: "1", label: "Manches" },
             },
         },

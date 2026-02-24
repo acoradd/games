@@ -90,6 +90,8 @@ interface BombermanGameState {
     bonuses: BonusBM[];
     playerNames: Record<string, string>;
     tick: number;
+    bombTickEvery: number; // run bomb logic every N game ticks
+    bombTickMs: number;    // ms per bomb-tick (for client countdown display)
     currentRound: number;
     maxRounds: number;
     roundPoints: Record<string, number>;
@@ -112,7 +114,8 @@ const TRON_GRID_SIZES: Record<string, number> = { Petite: 20, Moyenne: 30, Grand
 const TRON_COLORS = ["#00e5ff", "#ff1744", "#76ff03", "#ff6d00"];
 const SNAKE_APPLE_COUNT = 3;
 
-const BOMB_TICK_MS = 150;
+const GAME_TICK_MS = 50;
+const BOMB_TICK_SPEEDS = [300, 200, 150, 100, 75]; // ms per bomb-tick for speed 1-5
 const FUSE_TICKS = 20;
 const EXPLOSION_TICKS = 5;
 const INVINCIBLE_TICKS = 8;
@@ -131,8 +134,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     private tronDirs = new Map<string, "up" | "down" | "left" | "right">();
     private snakeTrails = new Map<string, number[]>();
 
-    // Bomberman server-only state
-    private bombermanDirs = new Map<string, "up" | "down" | "left" | "right" | null>();
+    // Bomberman server-only state — one move per keypress, consumed each tick
+    private bombermanMovePending = new Map<string, "up" | "down" | "left" | "right">();
     private bombermanBombsPending = new Set<string>();
     private bombIdCounter = 0;
 
@@ -764,6 +767,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const lives      = Math.min(5, Math.max(1, parseInt(String(options["lives"]      ?? "3"), 10)));
         const bombCount  = Math.min(3, Math.max(1, parseInt(String(options["bombCount"]  ?? "1"), 10)));
         const bombRange  = Math.min(4, Math.max(1, parseInt(String(options["bombRange"]  ?? "2"), 10)));
+        const bombSpeedIndex = Math.min(4, Math.max(0, parseInt(String(options["bombSpeed"] ?? "3"), 10) - 1));
+        const bombTickMs = BOMB_TICK_SPEEDS[bombSpeedIndex] ?? 150;
+        const bombTickEvery = Math.max(1, Math.round(bombTickMs / GAME_TICK_MS));
         const mapSizeKey = String(options["mapSize"] ?? "Normale");
 
         const roundCarryOver = this.prevRound;
@@ -831,7 +837,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const players: Record<string, BombermanPlayer> = {};
         const playerNames: Record<string, string> = { ...existingPlayerNames };
 
-        this.bombermanDirs.clear();
+        this.bombermanMovePending.clear();
         this.bombermanBombsPending.clear();
         this.bombIdCounter = 0;
 
@@ -854,7 +860,6 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 color: bombermanColors[i]!,
                 eliminatedAt: 0,
             };
-            this.bombermanDirs.set(sessionId, null);
         });
 
         const gs: BombermanGameState = {
@@ -868,6 +873,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             bonuses: [],
             playerNames,
             tick: 0,
+            bombTickEvery,
+            bombTickMs,
             currentRound,
             maxRounds,
             roundPoints,
@@ -875,7 +882,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         };
 
         this.state.gameStateJson = JSON.stringify(gs);
-        this.gameSimInterval = this.clock.setInterval(() => this.bombermanTick(), BOMB_TICK_MS);
+        this.gameSimInterval = this.clock.setInterval(() => this.bombermanTick(), GAME_TICK_MS);
     }
 
     private bombermanTick() {
@@ -891,34 +898,36 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
         const powerUps = options["powerUps"] !== false;
 
-        const { cols, rows } = gs;
+        const { cols, rows, bombTickEvery } = gs;
+        const runBombTick = gs.tick % (bombTickEvery ?? 1) === 0;
         const grid = gs.grid.split("");
 
-        // ── 1. Movement ──────────────────────────────────────────────────────
+        const dirDeltas: Record<string, { dx: number; dy: number }> = {
+            up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 },
+            left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 },
+        };
+
+        // ── 1. Movement (one step per keypress, consumed each tick) ──────────
         for (const [sessionId, p] of Object.entries(gs.players)) {
             if (!p.alive) continue;
-            const dir = this.bombermanDirs.get(sessionId);
+            const dir = this.bombermanMovePending.get(sessionId);
             if (!dir) continue;
 
-            const dirDeltas: Record<string, { dx: number; dy: number }> = {
-                up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 },
-                left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 },
-            };
-            const { dx, dy } = dirDeltas[dir] ?? { dx: 0, dy: 0 };
+            const { dx, dy } = dirDeltas[dir];
             const nx = p.x + dx;
             const ny = p.y + dy;
 
-            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-            const cell = grid[ny * cols + nx];
-            if (cell === "1" || cell === "2") continue;
-            const bombBlocking = gs.bombs.some((b) => b.x === nx && b.y === ny);
-            if (bombBlocking) continue;
-
-            p.x = nx;
-            p.y = ny;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const cell = grid[ny * cols + nx];
+                if (cell !== "1" && cell !== "2" && !gs.bombs.some((b) => b.x === nx && b.y === ny)) {
+                    p.x = nx;
+                    p.y = ny;
+                }
+            }
         }
+        this.bombermanMovePending.clear();
 
-        // ── 2. Bomb placement ────────────────────────────────────────────────
+        // ── 2. Bomb placement (immediate, one per keypress) ──────────────────
         for (const sessionId of this.bombermanBombsPending) {
             const p = gs.players[sessionId];
             if (!p || !p.alive) continue;
@@ -937,7 +946,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
         this.bombermanBombsPending.clear();
 
-        // ── 3. Bomb fuse tick & explosions ───────────────────────────────────
+        // ── 3–7. Bomb logic (runs every bombTickEvery game ticks) ────────────
+        if (runBombTick) {
+
+        // ── 3. Fuse tick & explosions ────────────────────────────────────────
         const newBombs: BombBM[] = [];
         const explodingBombs: BombBM[] = [];
 
@@ -1067,6 +1079,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         // ── 7. Win check ─────────────────────────────────────────────────────
         this.checkBombermanRoundEnd(gs);
+
+        } // end if (runBombTick)
 
         this.state.gameStateJson = JSON.stringify(gs);
     }
@@ -1278,11 +1292,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.tronDirs.set(client.sessionId, data.dir as TronPlayer["dir"]);
         },
 
-        "bomberman:move": (client: Client, data: { dir: string | null }) => {
+        "bomberman:move": (client: Client, data: { dir: string }) => {
             if (this.state.status !== "game") return;
-            const validDirs = ["up", "down", "left", "right", null];
+            const validDirs = ["up", "down", "left", "right"];
             if (!validDirs.includes(data.dir)) return;
-            this.bombermanDirs.set(client.sessionId, data.dir as ("up" | "down" | "left" | "right" | null));
+            this.bombermanMovePending.set(client.sessionId, data.dir as "up" | "down" | "left" | "right");
         },
 
         "bomberman:bomb": (client: Client) => {

@@ -6,20 +6,14 @@ interface GameCardProps {
 }
 
 export default function GameCard({ gameMode, onCreateRoom }: GameCardProps) {
+    const thumbnailUrl = `/assets/games/${gameMode.slug}/thumbnail.png`;
     return (
         <div className="bg-gray-800 rounded-xl p-6 flex flex-col gap-4 border border-gray-700 hover:border-indigo-500 transition-colors">
-            {gameMode.thumbnailUrl ? (
-                <img
-                    src={gameMode.thumbnailUrl}
-                    alt={gameMode.name}
-                    className="w-full h-36 object-cover rounded-lg"
-                />
-            ) : (
-                <div className="w-full h-36 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-4xl font-bold text-white">
-                    {gameMode.name[0]}
-                </div>
-            )}
-
+            <img
+                src={thumbnailUrl}
+                alt={gameMode.name}
+                className="w-full h-36 object-cover rounded-lg"
+            />
             <div className="flex-1">
                 <h2 className="text-xl font-bold text-white">{gameMode.name}</h2>
                 {gameMode.description && (

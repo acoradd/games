@@ -8,15 +8,8 @@ import { getStoredPlayer } from "../services/playerService";
 import { getGameModes } from "../services/gameModeService";
 import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
 
-// ── Gradient et emoji par jeu ────────────────────────────────────────────────
-const SLUG_STYLE: Record<string, { gradient: string; emoji: string }> = {
-    tron:      { gradient: "from-cyan-500 to-blue-700",    emoji: "🏍️" },
-    bomberman: { gradient: "from-orange-500 to-red-700",   emoji: "💣" },
-    memory:    { gradient: "from-violet-500 to-purple-700",emoji: "🃏" },
-    motus:     { gradient: "from-emerald-500 to-teal-700", emoji: "📝" },
-};
-function slugStyle(slug: string) {
-    return SLUG_STYLE[slug] ?? { gradient: "from-gray-600 to-gray-800", emoji: "🎮" };
+function getThumbnailUrl(slug: string) {
+    return `/assets/games/${slug}/thumbnail.png`;
 }
 
 // ── Composant options ─────────────────────────────────────────────────────────
@@ -357,7 +350,6 @@ export default function LobbyPage() {
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {gameModes.map((gm) => {
-                                    const { gradient, emoji } = slugStyle(gm.slug);
                                     return (
                                         <button
                                             key={gm.slug}
@@ -365,9 +357,11 @@ export default function LobbyPage() {
                                             onClick={() => handleSelectGame(gm.slug)}
                                             className={`text-left rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition-colors disabled:cursor-default disabled:hover:border-gray-700 group`}
                                         >
-                                            <div className={`bg-gradient-to-br ${gradient} h-24 flex items-center justify-center text-5xl`}>
-                                                {emoji}
-                                            </div>
+                                            <img
+                                                src={getThumbnailUrl(gm.slug)}
+                                                alt={gm.name}
+                                                className="h-36 flex object-cover rounded-lg w-full"
+                                            />
                                             <div className="p-4 bg-gray-900">
                                                 <p className="font-bold text-white">{gm.name}</p>
                                                 <p className="text-gray-400 text-xs mt-1 line-clamp-2">{gm.description}</p>
@@ -384,12 +378,18 @@ export default function LobbyPage() {
                             {selectedGame && (
                                 <div>
                                     {/* Bannière du jeu */}
-                                    <div className={`bg-gradient-to-br ${slugStyle(selectedSlug).gradient} rounded-xl h-40 flex items-center justify-center gap-4 mb-5 relative`}>
-                                        <span className="text-7xl">{slugStyle(selectedSlug).emoji}</span>
-                                        <div>
-                                            <p className="text-white font-bold text-2xl">{selectedGame.name}</p>
-                                            <p className="text-white/70 text-sm">{selectedGame.minPlayers}–{selectedGame.maxPlayers} joueurs</p>
-                                        </div>
+                                    <div
+                                        className={`rounded-xl h-40 mb-5 relative`}
+                                        style={{ backgroundImage: getThumbnailUrl(selectedGame.slug) }}
+                                    >
+                                        <img
+                                            src={getThumbnailUrl(selectedGame.slug)}
+                                            alt={selectedGame.name}
+                                            className="rounded-xl h-full object-cover w-full absolute top-0 right-0 left-0"
+                                        />
+                                        <p className="absolute bottom-3 left-3 bg-black/40 p-1 rounded-lg text-white font-bold text-2xl">{selectedGame.name}</p>
+                                        <p className="absolute bottom-3 right-3 bg-black/40 p-1 rounded-lg text-white/70 text-sm">{selectedGame.minPlayers}–{selectedGame.maxPlayers} joueurs</p>
+
                                         {isHost && (
                                             <button
                                                 onClick={() => handleSelectGame("")}

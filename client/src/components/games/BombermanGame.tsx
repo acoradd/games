@@ -83,7 +83,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             ctx.strokeStyle = "#4b5563";
             ctx.lineWidth = 1;
             ctx.stroke();
-            const secondsLeft = Math.max(1, Math.ceil(b.fuseLeft / 6.67));
+            const secondsLeft = Math.max(1, Math.ceil(b.fuseLeft * gs.bombTickMs / 1000));
             ctx.fillStyle = secondsLeft <= 1 ? "#ef4444" : "#f9fafb";
             ctx.font = `bold ${cs * 0.38}px sans-serif`;
             ctx.textAlign = "center";
@@ -130,21 +130,15 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
         const dirMap: Record<string, string> = {
             ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
             w: "up", s: "down", a: "left", d: "right",
+            z: "up", q: "left"
         };
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === " ") { e.preventDefault(); room.send("bomberman:bomb"); return; }
+            if (e.key === " ") { e.preventDefault(); if (!e.repeat) room.send("bomberman:bomb"); return; }
             const dir = dirMap[e.key];
             if (dir) { e.preventDefault(); room.send("bomberman:move", { dir }); }
         };
-        const onKeyUp = (e: KeyboardEvent) => {
-            if (dirMap[e.key]) room.send("bomberman:move", { dir: null });
-        };
         window.addEventListener("keydown", onKeyDown);
-        window.addEventListener("keyup", onKeyUp);
-        return () => {
-            window.removeEventListener("keydown", onKeyDown);
-            window.removeEventListener("keyup", onKeyUp);
-        };
+        return () => window.removeEventListener("keydown", onKeyDown);
     }, [room]);
 
     // ── Overlays helpers ──────────────────────────────────────────────────
