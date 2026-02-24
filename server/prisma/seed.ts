@@ -14,6 +14,7 @@ async function main() {
             options: {
                 speed:   { type: "range",  min: 1, max: 5, default: 3,        label: "Vitesse" },
                 mapSize: { type: "select", options: ["Petite", "Moyenne", "Grande"], default: "Moyenne", label: "Carte" },
+                mode:    { type: "select", options: ["Tron", "Snake"], default: "Tron", label: "Mode" },
             },
         },
         {
@@ -24,9 +25,11 @@ async function main() {
             maxPlayers: 4,
             isActive: true,
             options: {
-                lives:     { type: "range", min: 1, max: 5, default: 3, label: "Vies" },
-                bombCount: { type: "range", min: 1, max: 3, default: 1, label: "Bombes initiales" },
-                powerUps:  { type: "toggle", default: true,              label: "Power-ups" },
+                lives:      { type: "range",  min: 1, max: 5, default: 3,          label: "Vies" },
+                bombCount:  { type: "range",  min: 1, max: 3, default: 1,          label: "Bombes initiales" },
+                bombRange:  { type: "range",  min: 1, max: 4, default: 2,          label: "Portée initiale" },
+                mapSize:    { type: "select", options: ["Petite", "Normale", "Grande"], default: "Normale", label: "Carte" },
+                powerUps:   { type: "toggle", default: true,                       label: "Power-ups" },
             },
         },
         {

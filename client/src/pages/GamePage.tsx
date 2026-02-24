@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, LobbyState, MemoryGameState, ChatMsg } from "../models/Lobby";
+import type { LobbyPlayer, LobbyState, MemoryGameState, TronGameState, BombermanGameState, ChatMsg } from "../models/Lobby";
 import { joinLobby } from "../services/lobbyService";
 import { getStoredPlayer } from "../services/playerService";
 import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
 import { colyseusClient } from "../webservices/colyseus";
 import MemoryGame from "../components/games/MemoryGame";
+import TronGame from "../components/games/TronGame";
+import BombermanGame from "../components/games/BombermanGame";
 
 // ── Reconnection token persistence ─────────────────────────────────────────
 function tokenKey(roomId: string) { return `reconnect_${roomId}`; }
@@ -15,8 +17,6 @@ function saveToken(roomId: string, token: string) { localStorage.setItem(tokenKe
 function clearToken(roomId: string) { localStorage.removeItem(tokenKey(roomId)); }
 
 // ── Cross-tab detection via BroadcastChannel ────────────────────────────────
-// Ask other tabs if they already hold the room connection.
-// Returns true if another tab responds within 200 ms.
 function checkOtherTabActive(roomId: string): Promise<boolean> {
     return new Promise((resolve) => {
         const channel = new BroadcastChannel(`room_${roomId}`);
@@ -50,7 +50,6 @@ export default function GamePage() {
     const reconnectionTokenRef = useRef<string>("");
     const cancelledRef = useRef(false);
     const returningToLobbyRef = useRef(false);
-    // BroadcastChannel that advertises "this tab holds the room connection"
     const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
     const [loading, setLoading] = useState(true);
@@ -59,10 +58,12 @@ export default function GamePage() {
 
     const [sessionId, setSessionId] = useState("");
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
-    const [gameState, setGameState] = useState<MemoryGameState | null>(null);
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
 
-    // Open the BroadcastChannel and start responding "active" to "check" pings.
+    const [memoryState, setMemoryState] = useState<MemoryGameState | null>(null);
+    const [tronState, setTronState] = useState<TronGameState | null>(null);
+    const [bombermanState, setBombermanState] = useState<BombermanGameState | null>(null);
+
     function openBroadcastChannel(id: string) {
         broadcastChannelRef.current?.close();
         const channel = new BroadcastChannel(`room_${id}`);
@@ -94,8 +95,14 @@ export default function GamePage() {
         setPlayers(list);
 
         try {
-            const gs = JSON.parse((s["gameStateJson"] as string) ?? "{}") as MemoryGameState;
-            if (gs.cards) setGameState(gs);
+            const gs = JSON.parse((s["gameStateJson"] as string) ?? "{}") as Record<string, unknown>;
+            if (gs["cards"]) {
+                setMemoryState(gs as unknown as MemoryGameState);
+            } else if (gs["gridSize"] !== undefined && gs["playerOrder"]) {
+                setTronState(gs as unknown as TronGameState);
+            } else if (gs["cols"] !== undefined && gs["bombs"]) {
+                setBombermanState(gs as unknown as BombermanGameState);
+            }
         } catch {
             // ignore parse errors
         }
@@ -123,7 +130,6 @@ export default function GamePage() {
         });
 
         room.onLeave((code) => {
-            // 4000 = consented (we called room.leave()), 1000 = normal close — skip reconnect
             if (code === 4000 || code === 1000) return;
             if (cancelledRef.current) return;
             setReconnecting(true);
@@ -166,7 +172,6 @@ export default function GamePage() {
             }
         }
 
-        // All attempts failed
         clearToken(roomId);
         if (!cancelledRef.current) {
             navigate("/");
@@ -190,13 +195,11 @@ export default function GamePage() {
                 if (!room) {
                     const storedToken = loadToken(roomId);
                     if (storedToken) {
-                        // Check if another tab is already holding this room — if so, don't steal it.
                         const anotherTabActive = await checkOtherTabActive(roomId);
                         if (!anotherTabActive) {
                             try {
                                 room = await colyseusClient.reconnect<LobbyState>(storedToken);
                             } catch {
-                                // Token expired or no pending reconnection — fall through to fresh join
                                 clearToken(roomId);
                                 room = await joinLobby(roomId);
                             }
@@ -278,17 +281,33 @@ export default function GamePage() {
                 </div>
             )}
 
-            {slug === "memory" && gameState ? (
+            {slug === "memory" && memoryState ? (
                 <MemoryGame
                     room={roomRef.current!}
                     sessionId={sessionId}
-                    gameState={gameState}
+                    gameState={memoryState}
+                    players={players}
+                    chatMessages={chatMessages}
+                />
+            ) : slug === "tron" && tronState ? (
+                <TronGame
+                    room={roomRef.current!}
+                    sessionId={sessionId}
+                    gameState={tronState}
+                    players={players}
+                    chatMessages={chatMessages}
+                />
+            ) : slug === "bomberman" && bombermanState ? (
+                <BombermanGame
+                    room={roomRef.current!}
+                    sessionId={sessionId}
+                    gameState={bombermanState}
                     players={players}
                     chatMessages={chatMessages}
                 />
             ) : (
                 <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
-                    <p className="text-gray-400">Jeu "{slug}" — en cours de développement.</p>
+                    <p className="text-gray-400">Chargement…</p>
                 </div>
             )}
         </>

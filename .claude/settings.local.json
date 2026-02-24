@@ -15,7 +15,9 @@
       "Bash(node:*)",
       "Bash(ls:*)",
       "Bash(head:*)",
-      "Bash(cd /c/Programmation/aco/accoradd-games/client && ./node_modules/.bin/tsc --noEmit 2>&1)"
+      "Bash(cd /c/Programmation/aco/accoradd-games/client && ./node_modules/.bin/tsc --noEmit 2>&1)",
+      "Bash(cd C:/Programmation/aco/accoradd-games/server && ./node_modules/.bin/tsc --noEmit 2>&1)",
+      "Bash(cd C:/Programmation/aco/accoradd-games/client && ./node_modules/.bin/tsc --noEmit 2>&1)"
     ]
   }
 }
