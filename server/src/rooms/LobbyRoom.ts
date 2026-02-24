@@ -1024,7 +1024,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                         p.alive = false;
                         p.eliminated = true;
                         p.eliminatedAt = gs.tick;
-                        if (lp) { lp.isEliminated = true; lp.isConnected = false; }
+                        // Note: LobbyPlayer.isEliminated is intentionally NOT set here.
+                        // Normal in-game deaths should not exclude the player from future rounds.
+                        // LobbyPlayer.isEliminated is only set by eliminatePlayer() on disconnect.
                     } else {
                         p.invincibleTicks = INVINCIBLE_TICKS;
                         const pi = gs.playerOrder.indexOf(sessionId);
