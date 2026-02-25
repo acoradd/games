@@ -28,14 +28,36 @@ const server = defineServer({
         lobby: defineRoom(LobbyRoom),
     },
 
+    /**
+     * Server options including CORS configuration
+     */
+    options: {
+        cors: {
+            origin: process.env.CORS_ORIGIN || "*",
+            credentials: true
+        }
+    },
+
     express: (app) => {
         // Configure CORS
         const corsOrigin = process.env.CORS_ORIGIN || "*";
         app.use(cors({
             origin: corsOrigin === "*" ? "*" : corsOrigin.split(","),
             credentials: true,
-            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allowedHeaders: ["Content-Type", "Authorization"]
+            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+            allowedHeaders: [
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "referer",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers",
+                "X-Forwarded-For",
+                "X-Forwarded-Proto"
+            ],
+            exposedHeaders: ["Content-Disposition"]
         }));
 
         app.use(express.json());
