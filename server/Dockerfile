@@ -24,7 +24,6 @@ COPY --from=builder /app/server/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/server/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/server/node_modules/@prisma ./node_modules/@prisma
 COPY server/prisma ./prisma
-COPY server/src/scripts/OpenLexicon.tsv ./build/scripts/OpenLexicon.tsv
 COPY server/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 EXPOSE 2567

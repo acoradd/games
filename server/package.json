@@ -16,7 +16,8 @@
     "clean": "rimraf build",
     "test": "mocha -r tsx test/**.test.ts --exit --timeout 15000",
     "seed": "tsx src/scripts/seed.ts",
-    "import:words": "tsx src/scripts/importWords.ts"
+    "import:words": "tsx src/scripts/importWords.ts",
+    "generate:words-migration": "tsx src/scripts/generateWordsMigration.ts"
   },
   "author": "",
   "license": "UNLICENSED",
