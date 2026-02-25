@@ -5,6 +5,7 @@ import {
     playground,
 } from "colyseus";
 import express from "express";
+import cors from "cors";
 
 /**
  * Import your Room files
@@ -28,6 +29,15 @@ const server = defineServer({
     },
 
     express: (app) => {
+        // Configure CORS
+        const corsOrigin = process.env.CORS_ORIGIN || "*";
+        app.use(cors({
+            origin: corsOrigin === "*" ? "*" : corsOrigin.split(","),
+            credentials: true,
+            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allowedHeaders: ["Content-Type", "Authorization"]
+        }));
+
         app.use(express.json());
 
         // Mount health check endpoints
