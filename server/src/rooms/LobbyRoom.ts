@@ -185,6 +185,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     // Motus server-only state
     private motusSecret: string = "";
     private motusRoundTimer: { clear(): void } | null = null;
+    // VS only: full guess history per player (never sent in gameStateJson)
+    private motusVsGuesses: Map<string, MotusGuess[]> = new Map();
 
     onCreate(_options: Record<string, unknown>) {
         this.setState(new LobbyState());
@@ -244,6 +246,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 await this.allowReconnection(client, 30);
                 leaving.isConnected = true;
                 console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} reconnected`);
+                // Restore private Motus guesses after reconnection
+                if (this.state.selectedGameSlug === "motus" && this.state.status === "game") {
+                    const privateGuesses = this.motusVsGuesses.get(client.sessionId);
+                    if (privateGuesses) client.send("motus:myGuesses", privateGuesses);
+                }
             } catch {
                 console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} reconnection timed out, eliminating`);
                 this.eliminatePlayer(client.sessionId);
@@ -676,12 +683,14 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
 
         this.motusSecret = wordRow.text;
+        this.motusVsGuesses.clear();
 
         const playerIds = Array.from(this.state.players.keys())
             .filter((id) => !this.state.players.get(id)?.isEliminated);
 
         const playerNames: Record<string, string> = { ...existingPlayerNames };
         playerIds.forEach((id) => {
+            this.motusVsGuesses.set(id, []);
             const p = this.state.players.get(id);
             if (p) playerNames[id] = p.username;
         });
@@ -1601,11 +1610,17 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
 
             const result = this.computeMotusResult(this.motusSecret, normalized);
-            const guess: MotusGuess = { word: normalized, result };
             const isSolved = result.every((r) => r === "correct");
 
             if (gs.mode === "vs") {
-                player.guesses.push(guess);
+                // Store the real word privately — never written to gameStateJson
+                const privateGuesses = this.motusVsGuesses.get(sessionId) ?? [];
+                privateGuesses.push({ word: normalized, result });
+                this.motusVsGuesses.set(sessionId, privateGuesses);
+
+                // Public state: result only, word hidden
+                player.guesses.push({ word: "", result });
+
                 if (isSolved) {
                     player.solved = true;
                     player.solvedAt = Date.now();
@@ -1619,9 +1634,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 if (allDone) {
                     this.endMotusRound(gs, null);
                 }
+
+                this.state.gameStateJson = JSON.stringify(gs);
+                // Send the player their full private guess history
+                client.send("motus:myGuesses", privateGuesses);
             } else {
-                // Coop
-                gs.sharedGuesses.push(guess);
+                // Coop: guesses are shared and visible to all
+                gs.sharedGuesses.push({ word: normalized, result });
                 if (isSolved) {
                     this.endMotusRound(gs, sessionId);
                 } else if (gs.maxAttempts > 0 && gs.sharedGuesses.length >= gs.maxAttempts) {
@@ -1629,9 +1648,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 } else {
                     gs.currentTurnId = this.nextCoopPlayer(gs);
                 }
+                this.state.gameStateJson = JSON.stringify(gs);
             }
-
-            this.state.gameStateJson = JSON.stringify(gs);
         },
 
         "tron:input": (client: Client, data: { dir: string }) => {

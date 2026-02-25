@@ -1,154 +1,255 @@
 import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, LobbyState, MotusGameState, MotusGuess, MotusLetterResult } from "../../models/Lobby";
-import type { ChatMsg } from "../../models/Lobby";
+import type {
+    LobbyPlayer, LobbyState,
+    MotusGameState, MotusGuess, MotusLetterResult,
+    ChatMsg,
+} from "../../models/Lobby";
 import GameShell from "./GameShell";
 
-interface Props {
-    room: Room<LobbyState>;
-    sessionId: string;
-    gameState: MotusGameState;
-    players: LobbyPlayer[];
-    chatMessages: ChatMsg[];
+// ── AZERTY layout ─────────────────────────────────────────────────────────────
+
+const AZERTY_ROWS = [
+    ["a","z","e","r","t","y","u","i","o","p"],
+    ["q","s","d","f","g","h","j","k","l","m"],
+    ["w","x","c","v","b","n"],
+] as const;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const RESULT_PRIORITY: Record<MotusLetterResult, number> = { correct: 3, misplaced: 2, absent: 1 };
+
+function computeLetterStates(guesses: MotusGuess[]): Record<string, MotusLetterResult> {
+    const states: Record<string, MotusLetterResult> = {};
+    for (const { word, result } of guesses) {
+        for (let i = 0; i < word.length; i++) {
+            const l = word[i]!;
+            const r = result[i]!;
+            if (!states[l] || RESULT_PRIORITY[r] > RESULT_PRIORITY[states[l]!]) states[l] = r;
+        }
+    }
+    return states;
 }
 
-// ── Letter cell ──────────────────────────────────────────────────────────────
+/** Tailwind classes for cell size, responsive to word length. */
+function cellSizeClass(wordLength: number): string {
+    if (wordLength <= 6)  return "w-14 h-14 text-xl";
+    if (wordLength <= 8)  return "w-12 h-12 text-lg";
+    if (wordLength <= 10) return "w-11 h-11 text-base";
+    return "w-9 h-9 text-sm";
+}
 
-function LetterCell({ letter, result, isFirst }: { letter: string; result: MotusLetterResult | null; isFirst: boolean }) {
-    const base = "w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded font-bold text-sm sm:text-base uppercase border select-none";
+// ── LetterCell ────────────────────────────────────────────────────────────────
 
-    let bg: string;
-    if (isFirst && !letter) {
-        bg = "bg-red-700/40 border-red-600 text-red-300";
-    } else if (!letter) {
-        bg = "bg-gray-800 border-gray-700 text-transparent";
-    } else if (!result) {
-        bg = "bg-gray-700 border-gray-500 text-white";
+function LetterCell({
+    letter, result, locked, cursor, sizeClass,
+}: {
+    letter:    string;
+    result?:   MotusLetterResult | null;
+    locked?:   boolean;   // first letter of empty / active row
+    cursor?:   boolean;   // next position to type
+    sizeClass: string;
+}) {
+    let style: string;
+    if (locked) {
+        style = "bg-green-700 border-green-500 text-white";
     } else if (result === "correct") {
-        bg = "bg-red-600 border-red-500 text-white";
+        style = "bg-green-600 border-green-500 text-white";
     } else if (result === "misplaced") {
-        bg = "bg-amber-500 border-amber-400 text-white";
+        style = "bg-amber-500 border-amber-400 text-white";
+    } else if (result === "absent") {
+        style = "bg-gray-700 border-gray-600 text-gray-400";
+    } else if (letter) {
+        style = "bg-gray-700 border-gray-400 text-white";
+    } else if (cursor) {
+        style = "bg-gray-800 border-indigo-400 text-transparent";
     } else {
-        bg = "bg-gray-700 border-gray-600 text-gray-400";
+        style = "bg-gray-800 border-gray-700 text-transparent";
     }
 
     return (
-        <div className={`${base} ${bg}`}>
-            {letter || (isFirst ? "?" : "")}
+        <div className={`${sizeClass} flex items-center justify-center rounded-md font-bold uppercase border-2 select-none transition-colors duration-100 ${style} ${cursor ? "animate-pulse" : ""}`}>
+            {letter}
         </div>
     );
 }
 
-// ── One guess row ────────────────────────────────────────────────────────────
-
-function GuessRow({ guess, wordLength, firstLetter }: { guess: MotusGuess | null; wordLength: number; firstLetter: string }) {
-    const letters = Array.from({ length: wordLength }, (_, i) => guess?.word[i] ?? "");
-    const results: (MotusLetterResult | null)[] = Array.from({ length: wordLength }, (_, i) => guess?.result[i] ?? null);
-
-    return (
-        <div className="flex gap-1">
-            {letters.map((letter, i) => (
-                <LetterCell
-                    key={i}
-                    letter={i === 0 && !guess ? firstLetter : letter}
-                    result={results[i]}
-                    isFirst={i === 0 && !guess}
-                />
-            ))}
-        </div>
-    );
-}
-
-// ── Grid (full grid with empty rows) ────────────────────────────────────────
+// ── MotusGrid ─────────────────────────────────────────────────────────────────
 
 function MotusGrid({
-    guesses,
-    wordLength,
-    firstLetter,
-    maxAttempts,
-    currentInput,
-    isActive,
+    guesses, wordLength, firstLetter, maxAttempts, typedInput, isActive, shake,
 }: {
-    guesses: MotusGuess[];
-    wordLength: number;
+    guesses:     MotusGuess[];
+    wordLength:  number;
     firstLetter: string;
     maxAttempts: number;
-    currentInput?: string;
-    isActive?: boolean;
+    typedInput:  string;
+    isActive:    boolean;
+    shake:       boolean;
 }) {
-    const rows = maxAttempts > 0 ? maxAttempts : Math.max(guesses.length + 1, 6);
+    const rows      = maxAttempts > 0 ? maxAttempts : Math.max(guesses.length + 1, 6);
+    const sizeClass = cellSizeClass(wordLength);
+    const currentRow = guesses.length;
 
     return (
-        <div className="flex flex-col gap-1">
-            {Array.from({ length: rows }, (_, i) => {
-                const pastGuess = guesses[i] ?? null;
-                // current input row
-                if (!pastGuess && i === guesses.length && isActive && currentInput !== undefined) {
-                    const padded = currentInput.padEnd(wordLength, "");
-                    // show partial input without results
-                    return (
-                        <div key={i} className="flex gap-1">
-                            {Array.from({ length: wordLength }, (_, j) => (
+        <div className="flex flex-col gap-2">
+            {Array.from({ length: rows }, (_, rowIdx) => {
+                const guess        = guesses[rowIdx] ?? null;
+                const isCurrentRow = rowIdx === currentRow && isActive;
+                const isShaking    = isCurrentRow && shake;
+
+                return (
+                    <div key={rowIdx} className={`flex gap-1.5 ${isShaking ? "animate-shake" : ""}`}>
+                        {Array.from({ length: wordLength }, (_, colIdx) => {
+                            // ── past guess row ──
+                            if (guess) {
+                                return (
+                                    <LetterCell
+                                        key={colIdx}
+                                        letter={guess.word[colIdx] ?? ""}
+                                        result={guess.result[colIdx] ?? null}
+                                        sizeClass={sizeClass}
+                                    />
+                                );
+                            }
+
+                            // ── col 0: always show first letter as locked ──
+                            if (colIdx === 0) {
+                                return (
+                                    <LetterCell
+                                        key={colIdx}
+                                        letter={firstLetter}
+                                        locked
+                                        sizeClass={sizeClass}
+                                    />
+                                );
+                            }
+
+                            // ── future empty row ──
+                            if (!isCurrentRow) {
+                                return <LetterCell key={colIdx} letter="" sizeClass={sizeClass} />;
+                            }
+
+                            // ── active row: show typed letters + cursor ──
+                            const typedIdx = colIdx - 1;
+                            const letter   = typedInput[typedIdx] ?? "";
+                            const isCursor = typedIdx === typedInput.length && typedInput.length < wordLength - 1;
+
+                            return (
                                 <LetterCell
-                                    key={j}
-                                    letter={j === 0 && !padded[j] ? firstLetter : (padded[j] ?? "")}
-                                    result={null}
-                                    isFirst={j === 0 && !padded[j]}
+                                    key={colIdx}
+                                    letter={letter}
+                                    cursor={isCursor}
+                                    sizeClass={sizeClass}
                                 />
-                            ))}
-                        </div>
-                    );
-                }
-                // empty rows beyond
-                if (!pastGuess) {
-                    return <GuessRow key={i} guess={null} wordLength={wordLength} firstLetter={firstLetter} />;
-                }
-                return <GuessRow key={i} guess={pastGuess} wordLength={wordLength} firstLetter={firstLetter} />;
+                            );
+                        })}
+                    </div>
+                );
             })}
         </div>
     );
 }
 
-// ── Mini grid for other VS players ──────────────────────────────────────────
+// ── MiniGrid (VS — colors only, letters hidden) ───────────────────────────────
 
 function MiniGrid({ guesses, wordLength, name, isSolved }: {
-    guesses: MotusGuess[];
+    guesses:    MotusGuess[];
     wordLength: number;
-    firstLetter?: string;
-    name: string;
-    isSolved: boolean;
+    name:       string;
+    isSolved:   boolean;
 }) {
     return (
-        <div className="flex flex-col gap-1">
-            <p className={`text-xs font-semibold mb-0.5 truncate ${isSolved ? "text-emerald-400" : "text-gray-400"}`}>
-                {name} {isSolved ? "✓" : ""}
+        <div className="flex flex-col gap-1 min-w-0">
+            <p className={`text-xs font-semibold mb-0.5 truncate max-w-[8rem] ${isSolved ? "text-green-400" : "text-gray-400"}`}>
+                {name}{isSolved ? " ✓" : guesses.length > 0 ? ` · ${guesses.length} essai${guesses.length > 1 ? "s" : ""}` : ""}
             </p>
-            {guesses.slice(0, 3).map((g, i) => (
+            {guesses.map((g, i) => (
                 <div key={i} className="flex gap-0.5">
                     {Array.from({ length: wordLength }, (_, j) => {
                         const r = g.result[j] ?? "absent";
-                        const l = g.word[j] ?? "";
-                        const bg =
-                            r === "correct" ? "bg-red-600" :
-                            r === "misplaced" ? "bg-amber-500" :
-                            "bg-gray-700";
                         return (
-                            <div key={j} className={`w-4 h-4 rounded-sm text-[8px] flex items-center justify-center font-bold uppercase text-white ${bg}`}>
-                                {l}
-                            </div>
+                            <div key={j} className={`w-4 h-4 rounded-sm ${
+                                r === "correct"   ? "bg-green-600" :
+                                r === "misplaced" ? "bg-amber-500" :
+                                "bg-gray-600"
+                            }`} />
                         );
                     })}
                 </div>
             ))}
-            {guesses.length > 3 && (
-                <p className="text-[10px] text-gray-600">+{guesses.length - 3} essais</p>
-            )}
-            {guesses.length === 0 && <p className="text-[10px] text-gray-600">Aucun essai</p>}
+            {guesses.length === 0 && <p className="text-[10px] text-gray-600">En cours…</p>}
+        </div>
+    );
+}
+
+// ── AZERTY keyboard ───────────────────────────────────────────────────────────
+
+function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }: {
+    letterStates: Record<string, MotusLetterResult>;
+    onKey:        (letter: string) => void;
+    onBackspace:  () => void;
+    onEnter:      () => void;
+    disabled:     boolean;
+}) {
+    function keyStyle(letter: string): string {
+        const s = letterStates[letter];
+        if (s === "correct")   return "bg-green-600 border-green-500 text-white";
+        if (s === "misplaced") return "bg-amber-500 border-amber-400 text-white";
+        if (s === "absent")    return "bg-gray-600 border-gray-500 text-gray-400";
+        return "bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500";
+    }
+
+    return (
+        <div className={`flex flex-col gap-1.5 items-center select-none ${disabled ? "opacity-30 pointer-events-none" : ""}`}>
+            {AZERTY_ROWS.map((row, ri) => (
+                <div key={ri} className="flex gap-1 items-center">
+
+                    {ri === 2 && (
+                        <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={onEnter}
+                            className="h-10 px-3 rounded font-bold text-sm bg-indigo-700 border border-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-500 transition-colors"
+                        >
+                            ↵
+                        </button>
+                    )}
+
+                    {row.map((letter) => (
+                        <button
+                            key={letter}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => onKey(letter)}
+                            className={`w-9 h-10 rounded font-bold uppercase text-sm border transition-colors ${keyStyle(letter)}`}
+                        >
+                            {letter.toUpperCase()}
+                        </button>
+                    ))}
+
+                    {ri === 2 && (
+                        <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={onBackspace}
+                            className="h-10 px-3 rounded font-bold text-sm bg-gray-700 border border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500 transition-colors"
+                        >
+                            ←
+                        </button>
+                    )}
+                </div>
+            ))}
         </div>
     );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
+
+interface Props {
+    room:         Room<LobbyState>;
+    sessionId:    string;
+    gameState:    MotusGameState;
+    players:      LobbyPlayer[];
+    chatMessages: ChatMsg[];
+}
 
 export default function MotusGame({ room, sessionId, gameState, players, chatMessages }: Props) {
     const {
@@ -158,11 +259,14 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         roundPoints, roundWinnerIds,
     } = gameState;
 
-    const isHost = players.find((p) => p.id === sessionId)?.isHost ?? false;
-    const myState = gsPlayers[sessionId];
-    const myGuesses = mode === "coop" ? sharedGuesses : (myState?.guesses ?? []);
+    const isHost   = players.find((p) => p.id === sessionId)?.isHost ?? false;
+    const myState  = gsPlayers[sessionId];
     const isMyTurn = mode === "coop" ? sessionId === currentTurnId : true;
-    const isSolved = myState?.solved ?? false;
+
+    // VS: own guesses arrive via private message (words never in shared state)
+    const [myPrivateGuesses, setMyPrivateGuesses] = useState<MotusGuess[]>([]);
+    const myGuesses = mode === "coop" ? sharedGuesses : myPrivateGuesses;
+    const isSolved     = myState?.solved ?? false;
     const isEliminated = myState?.eliminated ?? false;
 
     const canGuess =
@@ -172,9 +276,29 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         !isSolved &&
         (maxAttempts === 0 || myGuesses.length < maxAttempts);
 
-    const [inputValue, setInputValue] = useState("");
+    // typedInput = letters for positions 1+ (position 0 is always firstLetter)
+    const [typedInput, setTypedInput] = useState("");
     const [invalidMsg, setInvalidMsg] = useState<string | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [shake,      setShake]      = useState(false);
+    const containerRef                = useRef<HTMLDivElement>(null);
+
+    // Reset typed input whenever a guess is accepted (myGuesses grows)
+    const prevGuessCount = useRef(myGuesses.length);
+    useEffect(() => {
+        if (myGuesses.length !== prevGuessCount.current) {
+            setTypedInput("");
+            prevGuessCount.current = myGuesses.length;
+        }
+    }, [myGuesses.length]);
+
+    // Also reset + refocus when it becomes our turn (coop) or new round starts
+    useEffect(() => {
+        if (canGuess) {
+            setTypedInput("");
+            containerRef.current?.focus();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canGuess, currentTurnId, myGuesses.length === 0]);
 
     // Round countdown
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -186,42 +310,65 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         return () => clearInterval(id);
     }, [roundDeadline]);
 
-    // Listen for invalid word
+    // VS: receive own full guess history (words hidden in shared state)
     useEffect(() => {
-        const handler = (_: unknown) => {
-            setInvalidMsg("Mot inconnu");
-            setTimeout(() => setInvalidMsg(null), 2000);
-        };
-        room.onMessage("motus:invalid", handler);
-        // Colyseus SDK does not return an unsubscribe — we rely on component unmount
+        room.onMessage("motus:myGuesses", (guesses: MotusGuess[]) => {
+            setMyPrivateGuesses(guesses);
+        });
     }, [room]);
 
-    function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
+    // Reset private guesses on new round (currentRound changes)
+    useEffect(() => {
+        setMyPrivateGuesses([]);
+    }, [currentRound]);
+
+    // Listen for invalid word from server
+    useEffect(() => {
+        const handler = () => {
+            setInvalidMsg("Mot inconnu");
+            setShake(true);
+            setTimeout(() => { setInvalidMsg(null); setShake(false); }, 1200);
+        };
+        room.onMessage("motus:invalid", handler);
+    }, [room]);
+
+    // ── Input actions ──────────────────────────────────────────────────────
+    function addLetter(char: string) {
         if (!canGuess) return;
-        const word = inputValue.trim().toLowerCase();
-        if (word.length !== wordLength) return;
-        if (word[0] !== firstLetter) {
-            setInvalidMsg(`Le mot doit commencer par "${firstLetter.toUpperCase()}"`);
-            setTimeout(() => setInvalidMsg(null), 2000);
-            return;
-        }
-        room.send("motus:guess", { word });
-        setInputValue("");
+        setTypedInput((v) => v.length < wordLength - 1 ? v + char : v);
     }
 
+    function removeLetter() {
+        if (!canGuess) return;
+        setTypedInput((v) => v.slice(0, -1));
+    }
+
+    function submitGuess() {
+        if (!canGuess) return;
+        if (typedInput.length < wordLength - 1) return;
+        room.send("motus:guess", { word: firstLetter + typedInput });
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent) {
+        if (!canGuess) return;
+        if (e.key === "Backspace") { e.preventDefault(); removeLetter(); return; }
+        if (e.key === "Enter")     { e.preventDefault(); submitGuess();  return; }
+        const char = e.key.toLowerCase();
+        if (/^[a-z]$/.test(char)) addLetter(char);
+    }
+
+    // ── Derived data ───────────────────────────────────────────────────────
+    const letterStates   = computeLetterStates(myGuesses);
     const participantIds = Object.keys(playerNames ?? {});
     const rankedByPoints = [...participantIds].sort(
         (a, b) => (roundPoints[b] ?? 0) - (roundPoints[a] ?? 0)
     );
+    const playerById         = new Map(players.map((p) => [p.id, p]));
+    const isMyCoopTurn       = mode === "coop" && sessionId === currentTurnId;
+    const currentTurnName    = playerNames[currentTurnId] ?? "";
+    const roundWinnerNames   = (roundWinnerIds ?? []).map((id) => playerNames[id] ?? id).join(", ");
 
-    const playerById = new Map(players.map((p) => [p.id, p]));
-
-    const roundWinnerNames = (roundWinnerIds ?? [])
-        .map((id) => playerNames[id] ?? id)
-        .join(", ");
-
-    // ── Scoreboard ────────────────────────────────────────────────────────
+    // ── Scoreboard ─────────────────────────────────────────────────────────
     const scoreboard = (
         <>
             <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">
@@ -229,23 +376,24 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             </p>
             <ul className="flex flex-col gap-2">
                 {rankedByPoints.map((id) => {
-                    const name = playerNames[id] ?? id;
-                    const p = playerById.get(id);
-                    const isElim = gsPlayers[id]?.eliminated ?? p?.isEliminated ?? false;
-                    const isConnected = p?.isConnected ?? true;
-                    const isMe = id === sessionId;
-                    const solved = gsPlayers[id]?.solved ?? false;
-                    const pts = roundPoints[id] ?? 0;
-                    const isCurrentTurn = mode === "coop" && id === currentTurnId;
+                    const p            = playerById.get(id);
+                    const isElim       = gsPlayers[id]?.eliminated ?? p?.isEliminated ?? false;
+                    const isConnected  = p?.isConnected ?? true;
+                    const isMe         = id === sessionId;
+                    const solved       = gsPlayers[id]?.solved ?? false;
+                    const pts          = roundPoints[id] ?? 0;
+                    const isCoopTurn   = mode === "coop" && id === currentTurnId;
 
                     return (
-                        <li key={id} className={`flex items-center justify-between gap-1 text-sm ${isElim ? "text-gray-600" : isCurrentTurn ? "text-indigo-300" : "text-gray-300"}`}>
+                        <li key={id} className={`flex items-center justify-between gap-1 text-sm ${
+                            isElim ? "text-gray-600" : isCoopTurn ? "text-indigo-300" : "text-gray-300"
+                        }`}>
                             <span className={`truncate flex items-center gap-1 ${isElim ? "line-through" : ""}`}>
-                                {isCurrentTurn && <span className="text-indigo-400">▶</span>}
-                                {solved && !isElim && <span className="text-emerald-400">✓</span>}
+                                {isCoopTurn  && <span className="text-indigo-400">▶</span>}
+                                {solved && !isElim && <span className="text-green-400">✓</span>}
                                 {!isConnected && !isElim && <span title="Reconnexion…">🔴</span>}
-                                {name}
-                                {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
+                                {playerNames[id] ?? id}
+                                {isMe   && <span className="text-gray-600 text-xs">(vous)</span>}
                                 {isElim && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
                             </span>
                             {maxRounds > 1 && (
@@ -258,12 +406,12 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         </>
     );
 
-    // ── End-of-round content ──────────────────────────────────────────────
+    // ── Round end ──────────────────────────────────────────────────────────
     const pointsStandings = (
         <ul className="flex flex-col gap-1 mb-4 text-left">
             {rankedByPoints.map((id) => {
-                const pts = roundPoints[id] ?? 0;
-                const isMe = id === sessionId;
+                const pts      = roundPoints[id] ?? 0;
+                const isMe     = id === sessionId;
                 const isWinner = (roundWinnerIds ?? []).includes(id);
                 return (
                     <li key={id} className="flex items-center justify-between text-sm">
@@ -280,12 +428,16 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
 
     const roundEndContent = (
         <div className="text-center">
-            <p className="text-2xl mb-1">
-                {secretWord ? secretWord.toUpperCase() : ""}
-            </p>
+            {secretWord && (
+                <p className="text-2xl font-bold tracking-widest text-white mb-1">
+                    {secretWord.toUpperCase()}
+                </p>
+            )}
             {roundWinnerNames ? (
                 <p className="text-indigo-300 font-semibold mb-3">
-                    {(roundWinnerIds ?? []).length === 1 ? `${roundWinnerNames} a trouvé !` : `Ex-aequo : ${roundWinnerNames}`}
+                    {(roundWinnerIds ?? []).length === 1
+                        ? `${roundWinnerNames} a trouvé !`
+                        : `Ex-aequo : ${roundWinnerNames}`}
                 </p>
             ) : (
                 <p className="text-gray-400 mb-3">Personne n'a trouvé.</p>
@@ -305,7 +457,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-2">Classement final</p>
             <ul className="flex flex-col gap-1 mb-4 text-left">
                 {rankedByPoints.map((id, rank) => {
-                    const pts = roundPoints[id] ?? 0;
+                    const pts  = roundPoints[id] ?? 0;
                     const isMe = id === sessionId;
                     return (
                         <li key={id} className="flex items-center justify-between text-sm gap-2">
@@ -322,10 +474,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         </div>
     );
 
-    // ── Header ────────────────────────────────────────────────────────────
-    const currentTurnName = playerNames[currentTurnId] ?? "";
-    const isMyCoopTurn = mode === "coop" && sessionId === currentTurnId;
-
+    // ── Header ─────────────────────────────────────────────────────────────
     const header = (
         <>
             <span className="text-xl">🔤</span>
@@ -347,7 +496,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                             : <span>Tour de <span className="text-white font-medium">{currentTurnName}</span></span>
                     ) : (
                         isSolved
-                            ? <span className="text-emerald-400 font-semibold">Trouvé !</span>
+                            ? <span className="text-green-400 font-semibold">Trouvé !</span>
                             : isEliminated
                             ? <span className="text-gray-500">Éliminé</span>
                             : <span className="text-white font-medium">{wordLength} lettres</span>
@@ -362,8 +511,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         </>
     );
 
-    // ── Main game area ────────────────────────────────────────────────────
-
+    // ── Render ─────────────────────────────────────────────────────────────
     return (
         <GameShell
             room={room}
@@ -377,11 +525,16 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             roundEndContent={roundEndContent}
             endContent={endContent}
         >
-            <div className="w-full max-w-2xl flex flex-col gap-6 items-center">
-
-                {/* VS: other players' mini-grids */}
-                {mode === "vs" && playerOrder.length > 1 && (
-                    <div className="w-full flex flex-wrap gap-4 justify-center">
+            {/* Focusable container — captures physical keyboard events */}
+            <div
+                ref={containerRef}
+                tabIndex={canGuess ? 0 : -1}
+                onKeyDown={handleKeyDown}
+                className="w-full max-w-2xl flex flex-col gap-5 items-center outline-none"
+            >
+                {/* VS mode: other players' mini-grids (colors only, no letters) */}
+                {mode === "vs" && playerOrder.filter((id) => id !== sessionId).length > 0 && (
+                    <div className="w-full flex flex-wrap gap-5 justify-center">
                         {playerOrder
                             .filter((id) => id !== sessionId)
                             .map((id) => {
@@ -392,7 +545,6 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                                         key={id}
                                         guesses={ps.guesses}
                                         wordLength={wordLength}
-                                        firstLetter={firstLetter}
                                         name={playerNames[id] ?? id}
                                         isSolved={ps.solved}
                                     />
@@ -407,59 +559,44 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                     wordLength={wordLength}
                     firstLetter={firstLetter}
                     maxAttempts={maxAttempts}
-                    currentInput={canGuess ? inputValue : undefined}
+                    typedInput={canGuess ? typedInput : ""}
                     isActive={canGuess}
+                    shake={shake}
                 />
 
-                {/* Coop: turn indicator */}
-                {mode === "coop" && phase === "playing" && !isMyCoopTurn && (
+                {/* Error message */}
+                <div className="h-5">
+                    {invalidMsg && (
+                        <p className="text-red-400 text-sm font-semibold text-center">{invalidMsg}</p>
+                    )}
+                </div>
+
+                {/* Coop: waiting indicator */}
+                {mode === "coop" && phase === "playing" && !isMyCoopTurn && !isSolved && (
                     <p className="text-gray-400 text-sm">
                         En attente de <span className="text-white font-medium">{currentTurnName}</span>…
                     </p>
                 )}
 
-                {/* Input */}
-                {canGuess && (
-                    <form onSubmit={handleSubmit} className="flex flex-col items-center gap-2 w-full max-w-xs">
-                        <div className="flex gap-2 w-full">
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => {
-                                    const v = e.target.value.toLowerCase().replace(/[^a-z]/g, "");
-                                    if (v.length <= wordLength) setInputValue(v);
-                                }}
-                                placeholder={`${firstLetter.toUpperCase()}${"_".repeat(wordLength - 1)}`}
-                                maxLength={wordLength}
-                                autoFocus
-                                className="flex-1 bg-gray-800 border border-gray-600 text-white text-center font-mono text-lg uppercase rounded-lg px-3 py-2 tracking-widest focus:outline-none focus:border-indigo-500"
-                            />
-                            <button
-                                type="submit"
-                                disabled={inputValue.length !== wordLength}
-                                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                            >
-                                OK
-                            </button>
-                        </div>
-                        {invalidMsg && (
-                            <p className="text-red-400 text-sm animate-pulse">{invalidMsg}</p>
-                        )}
-                        <p className="text-xs text-gray-600">
-                            {inputValue.length}/{wordLength} lettres · commence par {firstLetter.toUpperCase()}
-                        </p>
-                    </form>
+                {/* AZERTY keyboard */}
+                {phase === "playing" && !isSolved && !isEliminated && (
+                    <AzertyKeyboard
+                        letterStates={letterStates}
+                        onKey={addLetter}
+                        onBackspace={removeLetter}
+                        onEnter={submitGuess}
+                        disabled={!canGuess}
+                    />
                 )}
 
-                {/* Solved message */}
-                {isSolved && phase === "playing" && mode === "vs" && (
-                    <p className="text-emerald-400 font-semibold">Bravo, vous avez trouvé !</p>
+                {/* Solved */}
+                {isSolved && phase === "playing" && (
+                    <p className="text-green-400 font-semibold text-lg">Bravo, vous avez trouvé !</p>
                 )}
 
-                {/* Secret word revealed (playing phase, after solve) */}
+                {/* Secret word revealed mid-round (if server sends it) */}
                 {secretWord && phase === "playing" && (
-                    <p className="text-gray-300 text-lg font-bold tracking-widest">
+                    <p className="text-gray-300 text-xl font-bold tracking-widest">
                         {secretWord.toUpperCase()}
                     </p>
                 )}
