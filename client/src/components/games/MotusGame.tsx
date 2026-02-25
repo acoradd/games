@@ -310,10 +310,27 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         return () => clearInterval(id);
     }, [roundDeadline]);
 
+    // Coop: live typing visible to other players
+    const [opponentInput, setOpponentInput] = useState("");
+
+    // Reset opponent input when turn changes or a guess lands
+    useEffect(() => { setOpponentInput(""); }, [currentTurnId, sharedGuesses.length]);
+
+    // Send our own typing to others in coop
+    useEffect(() => {
+        if (mode === "coop" && canGuess) {
+            room.send("motus:typing", { input: typedInput });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [typedInput]);
+
     // VS: receive own full guess history (words hidden in shared state)
     useEffect(() => {
         room.onMessage("motus:myGuesses", (guesses: MotusGuess[]) => {
             setMyPrivateGuesses(guesses);
+        });
+        room.onMessage("motus:typing", ({ input }: { input: string }) => {
+            setOpponentInput(input);
         });
     }, [room]);
 
@@ -559,8 +576,8 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                     wordLength={wordLength}
                     firstLetter={firstLetter}
                     maxAttempts={maxAttempts}
-                    typedInput={canGuess ? typedInput : ""}
-                    isActive={canGuess}
+                    typedInput={canGuess ? typedInput : opponentInput}
+                    isActive={canGuess || (mode === "coop" && phase === "playing" && !isSolved && !isEliminated)}
                     shake={shake}
                 />
 

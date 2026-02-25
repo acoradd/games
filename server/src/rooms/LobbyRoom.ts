@@ -1652,6 +1652,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
         },
 
+        "motus:typing": (client: Client, data: { input: string }) => {
+            if (this.state.status !== "game" || this.state.selectedGameSlug !== "motus") return;
+            let gs: MotusGameState;
+            try { gs = JSON.parse(this.state.gameStateJson) as MotusGameState; } catch { return; }
+            if (gs.phase !== "playing" || gs.mode !== "coop") return;
+            if (gs.currentTurnId !== client.sessionId) return;
+            // Relay to all other clients (spectators see live typing)
+            this.broadcast("motus:typing", { input: data.input ?? "" }, { except: client });
+        },
+
         "tron:input": (client: Client, data: { dir: string }) => {
             if (this.state.status !== "game") return;
             const validDirs = ["up", "down", "left", "right"];
