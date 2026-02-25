@@ -28,16 +28,6 @@ const server = defineServer({
         lobby: defineRoom(LobbyRoom),
     },
 
-    /**
-     * Server options including CORS configuration
-     */
-    options: {
-        cors: {
-            origin: process.env.CORS_ORIGIN || "*",
-            credentials: true
-        }
-    },
-
     express: (app) => {
         // Configure CORS
         const corsOrigin = process.env.CORS_ORIGIN || "*";
