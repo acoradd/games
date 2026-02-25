@@ -97,3 +97,41 @@ export interface BombermanGameState {
     roundPoints: Record<string, number>;
     roundWinnerIds: string[];
 }
+
+// ── Motus ──────────────────────────────────────────────────────────────────
+
+export type MotusLetterResult = 'correct' | 'misplaced' | 'absent';
+
+export interface MotusGuess {
+    word:   string;
+    result: MotusLetterResult[];
+}
+
+export interface MotusPlayerState {
+    guesses:    MotusGuess[];
+    solved:     boolean;
+    solvedAt:   number;
+    eliminated: boolean;
+}
+
+export interface MotusGameState {
+    phase:         'playing' | 'roundEnd' | 'ended';
+    mode:          'vs' | 'coop';
+    wordLength:    number;
+    firstLetter:   string;
+    secretWord:    string | null;
+    maxAttempts:   number;
+    roundDeadline: number;
+
+    players:       Record<string, MotusPlayerState>;
+    playerOrder:   string[];
+
+    sharedGuesses: MotusGuess[];
+    currentTurnId: string;
+
+    playerNames:    Record<string, string>;
+    currentRound:   number;
+    maxRounds:      number;
+    roundPoints:    Record<string, number>;
+    roundWinnerIds: string[];
+}

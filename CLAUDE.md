@@ -156,7 +156,7 @@ npm run build
 
 ## Adding a New Game Mode
 
-1. **DB** — Add row in `server/prisma/seed.ts` and run `npm run seed`
+1. **DB** — Add row in `server/prisma/scripts/seed.ts` and run `npm run seed`
 2. **Server** — Add message handlers to `LobbyRoom.ts`: `init<Game>()`, action handlers, `gameStateJson` mutations
 3. **Client** — Create `client/src/components/games/<Game>.tsx` component; receive `room`, `sessionId`, `gameState`, `players`, `chatMessages` as props
 4. **GamePage** — Add `slug === "<game>"` branch in the render section

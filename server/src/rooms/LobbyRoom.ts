@@ -1,6 +1,7 @@
 import { Room, Client, CloseCode, ServerError } from "colyseus";
 import { LobbyState, LobbyPlayer, ChatMessage } from "./schema/LobbyState.js";
 import { verifyToken } from "../services/player.service.js";
+import { prisma } from "../lib/prisma.js";
 
 interface JoinOptions {
     username?: string;
@@ -102,6 +103,43 @@ interface BombBM { id: number; x: number; y: number; ownerId: string; fuseLeft: 
 interface ExplosionBM { cells: { x: number; y: number }[]; ticksLeft: number; }
 interface BonusBM { x: number; y: number; type: "bomb" | "range" | "shield"; }
 
+// ── Motus game types (server-only) ─────────────────────────────────────────
+type MotusLetterResult = "correct" | "misplaced" | "absent";
+
+interface MotusGuess {
+    word:   string;
+    result: MotusLetterResult[];
+}
+
+interface MotusPlayerState {
+    guesses:    MotusGuess[];
+    solved:     boolean;
+    solvedAt:   number;
+    eliminated: boolean;
+}
+
+interface MotusGameState {
+    phase:         "playing" | "roundEnd" | "ended";
+    mode:          "vs" | "coop";
+    wordLength:    number;
+    firstLetter:   string;
+    secretWord:    string | null;
+    maxAttempts:   number;
+    roundDeadline: number;
+
+    players:       Record<string, MotusPlayerState>;
+    playerOrder:   string[];
+
+    sharedGuesses: MotusGuess[];
+    currentTurnId: string;
+
+    playerNames:    Record<string, string>;
+    currentRound:   number;
+    maxRounds:      number;
+    roundPoints:    Record<string, number>;
+    roundWinnerIds: string[];
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────
 const SYMBOLS = [
     "🎮","🎲","🎯","⚽","🏀","🎾","🏆","🚀","🌟","🎪",
@@ -143,6 +181,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
     // Round carry-over between rounds of the same game session
     private prevRound: RoundCarryOver | null = null;
+
+    // Motus server-only state
+    private motusSecret: string = "";
+    private motusRoundTimer: { clear(): void } | null = null;
 
     onCreate(_options: Record<string, unknown>) {
         this.setState(new LobbyState());
@@ -267,6 +309,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.eliminatePlayerTron(sessionId);
         } else if (slug === "bomberman") {
             this.eliminatePlayerBomberman(sessionId);
+        } else if (slug === "motus") {
+            this.eliminatePlayerMotus(sessionId);
         }
     }
 
@@ -351,6 +395,47 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
 
         this.checkBombermanRoundEnd(gs);
+        this.state.gameStateJson = JSON.stringify(gs);
+    }
+
+    private eliminatePlayerMotus(sessionId: string) {
+        let gs: MotusGameState;
+        try {
+            gs = JSON.parse(this.state.gameStateJson) as MotusGameState;
+        } catch {
+            return;
+        }
+        if (gs.phase === "ended" || gs.phase === "roundEnd") return;
+
+        const p = gs.players[sessionId];
+        if (p) {
+            p.eliminated = true;
+        }
+
+        if (gs.mode === "coop") {
+            if (gs.currentTurnId === sessionId) {
+                gs.currentTurnId = this.nextCoopPlayer(gs);
+            }
+            const activeCount = gs.playerOrder.filter((id) => {
+                const player = gs.players[id];
+                return player && !player.eliminated;
+            }).length;
+            if (activeCount === 0) {
+                this.endMotusRound(gs, null);
+            }
+        } else {
+            // VS: check if all remaining players are done
+            const allDone = gs.playerOrder.every((id) => {
+                const player = gs.players[id];
+                if (!player) return true;
+                if (player.eliminated) return true;
+                return this.isMotusPlayerDone(gs, id);
+            });
+            if (allDone) {
+                this.endMotusRound(gs, null);
+            }
+        }
+
         this.state.gameStateJson = JSON.stringify(gs);
     }
 
@@ -445,6 +530,200 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
         this.stopGameLoop();
         return true;
+    }
+
+    // ── Motus helpers ────────────────────────────────────────────────────────
+
+    private normalizeMotusWord(word: string): string {
+        return word
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z]/g, "");
+    }
+
+    private computeMotusResult(secret: string, guess: string): MotusLetterResult[] {
+        const result: MotusLetterResult[] = Array(secret.length).fill("absent");
+        const remaining: Record<string, number> = {};
+        for (let i = 0; i < secret.length; i++) {
+            if (guess[i] === secret[i]) {
+                result[i] = "correct";
+            } else {
+                remaining[secret[i]!] = (remaining[secret[i]!] ?? 0) + 1;
+            }
+        }
+        for (let i = 0; i < secret.length; i++) {
+            if (result[i] !== "correct" && guess[i] && remaining[guess[i]!] && remaining[guess[i]!]! > 0) {
+                result[i] = "misplaced";
+                remaining[guess[i]!]!--;
+            }
+        }
+        return result;
+    }
+
+    private isMotusPlayerDone(gs: MotusGameState, playerId: string): boolean {
+        const player = gs.players[playerId];
+        if (!player) return true;
+        if (player.solved) return true;
+        if (gs.maxAttempts > 0 && player.guesses.length >= gs.maxAttempts) return true;
+
+        // Unlimited: done if >= attempts count of the first solver
+        const solvedPlayers = gs.playerOrder
+            .map((id) => gs.players[id])
+            .filter((p) => p?.solved);
+
+        if (solvedPlayers.length === 0) return false;
+
+        const bestAttempts = Math.min(...solvedPlayers.map((p) => p!.guesses.length));
+        return player.guesses.length >= bestAttempts;
+    }
+
+    private nextCoopPlayer(gs: MotusGameState): string {
+        const active = gs.playerOrder.filter((id) => {
+            const p = gs.players[id];
+            const lobbyP = this.state.players.get(id);
+            return p && !p.eliminated && lobbyP && !lobbyP.isEliminated;
+        });
+        if (active.length === 0) return gs.currentTurnId;
+        const idx = active.indexOf(gs.currentTurnId);
+        return active[(idx + 1) % active.length] ?? active[0]!;
+    }
+
+    private endMotusRound(gs: MotusGameState, coopWinnerId: string | null): void {
+        // Cancel the round timer
+        if (this.motusRoundTimer) {
+            this.motusRoundTimer.clear();
+            this.motusRoundTimer = null;
+        }
+
+        gs.secretWord = this.motusSecret;
+
+        if (gs.mode === "vs") {
+            const solved = gs.playerOrder.filter((id) => gs.players[id]?.solved);
+            if (solved.length > 0) {
+                const minAttempts = Math.min(...solved.map((id) => gs.players[id]!.guesses.length));
+                const byAttempts = solved.filter((id) => gs.players[id]!.guesses.length === minAttempts);
+                if (byAttempts.length === 1) {
+                    gs.roundWinnerIds = byAttempts;
+                } else {
+                    const minTime = Math.min(...byAttempts.map((id) => gs.players[id]!.solvedAt));
+                    gs.roundWinnerIds = byAttempts.filter((id) => gs.players[id]!.solvedAt === minTime);
+                }
+            } else {
+                gs.roundWinnerIds = [];
+            }
+        } else {
+            gs.roundWinnerIds = coopWinnerId ? [coopWinnerId] : [];
+        }
+
+        // Award round points (1 pt per winner; split if tie gives 0)
+        if (gs.roundWinnerIds.length === 1) {
+            const wId = gs.roundWinnerIds[0]!;
+            gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
+        }
+
+        gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+    }
+
+    private async initMotus(): Promise<void> {
+        const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
+        const mode = (String(options["mode"] ?? "vs")) as "vs" | "coop";
+        const difficulty = String(options["difficulty"] ?? "medium");
+        const minLen = Math.max(3, parseInt(String(options["minWordLength"] ?? "5"), 10));
+        const maxLen = Math.max(minLen, parseInt(String(options["maxWordLength"] ?? "10"), 10));
+        const maxAttempts = parseInt(String(options["maxAttempts"] ?? "6"), 10);
+        const timeLimit = parseInt(String(options["timeLimit"] ?? "0"), 10);
+
+        const roundCarryOver = this.prevRound;
+        this.prevRound = null;
+        const currentRound = roundCarryOver?.currentRound ?? 1;
+        const maxRounds = roundCarryOver?.maxRounds ?? parseInt(String(options["rounds"] ?? "1"), 10);
+        const roundPoints: Record<string, number> = { ...(roundCarryOver?.roundPoints ?? {}) };
+        const existingPlayerNames: Record<string, string> = roundCarryOver?.playerNames ?? {};
+
+        // Frequency threshold by difficulty
+        const DIFFICULTY_THRESHOLDS: Record<string, number | null> = {
+            easy:   10,
+            medium: 1,
+            hard:   0.05,
+            expert: null,
+        };
+        const threshold = DIFFICULTY_THRESHOLDS[difficulty] ?? 1;
+
+        // Pick a random word from DB
+        const whereClause: Record<string, unknown> = {
+            isGuessable: true,
+            length: { gte: minLen, lte: maxLen },
+        };
+        if (threshold !== null) {
+            whereClause["frequency"] = { gte: threshold };
+        }
+
+        const count = await prisma.word.count({ where: whereClause as Parameters<typeof prisma.word.count>[0]["where"] });
+        if (count === 0) {
+            console.error(`[Motus] No words found for options: diff=${difficulty}, len=${minLen}-${maxLen}`);
+            return;
+        }
+        const skip = Math.floor(Math.random() * count);
+        const wordRow = await prisma.word.findFirst({
+            where: whereClause as Parameters<typeof prisma.word.findFirst>[0]["where"],
+            skip,
+        });
+
+        if (!wordRow) {
+            console.error("[Motus] Could not pick a word");
+            return;
+        }
+
+        this.motusSecret = wordRow.text;
+
+        const playerIds = Array.from(this.state.players.keys())
+            .filter((id) => !this.state.players.get(id)?.isEliminated);
+
+        const playerNames: Record<string, string> = { ...existingPlayerNames };
+        playerIds.forEach((id) => {
+            const p = this.state.players.get(id);
+            if (p) playerNames[id] = p.username;
+        });
+
+        const players: Record<string, MotusPlayerState> = {};
+        playerIds.forEach((id) => {
+            players[id] = { guesses: [], solved: false, solvedAt: 0, eliminated: false };
+        });
+
+        const gs: MotusGameState = {
+            phase: "playing",
+            mode,
+            wordLength: wordRow.length,
+            firstLetter: wordRow.text[0]!,
+            secretWord: null,
+            maxAttempts,
+            roundDeadline: timeLimit > 0 ? Date.now() + timeLimit * 1000 : 0,
+            players,
+            playerOrder: playerIds,
+            sharedGuesses: [],
+            currentTurnId: playerIds[0] ?? "",
+            playerNames,
+            currentRound,
+            maxRounds,
+            roundPoints,
+            roundWinnerIds: [],
+        };
+
+        this.state.gameStateJson = JSON.stringify(gs);
+
+        if (timeLimit > 0) {
+            if (this.motusRoundTimer) this.motusRoundTimer.clear();
+            this.motusRoundTimer = this.clock.setTimeout(() => {
+                let gsCurrent: MotusGameState;
+                try {
+                    gsCurrent = JSON.parse(this.state.gameStateJson) as MotusGameState;
+                } catch { return; }
+                if (gsCurrent.phase !== "playing") return;
+                this.endMotusRound(gsCurrent, null);
+                this.state.gameStateJson = JSON.stringify(gsCurrent);
+            }, timeLimit * 1000);
+        }
     }
 
     // ── Memory helpers ───────────────────────────────────────────────────────
@@ -1142,7 +1421,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             console.log(`[LobbyRoom ${this.roomId}] host returned everyone to lobby`);
         },
 
-        nextRound: (client: Client) => {
+        nextRound: async (client: Client) => {
             if (client.sessionId !== this.state.hostId) return;
             if (this.state.status !== "game") return;
 
@@ -1170,10 +1449,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 this.initTron();
             } else if (slug === "bomberman") {
                 this.initBomberman();
+            } else if (slug === "motus") {
+                await this.initMotus();
             }
         },
 
-        start: (client: Client) => {
+        start: async (client: Client) => {
             if (client.sessionId !== this.state.hostId) return;
             if (!this.state.selectedGameSlug) return;
             if (this.state.players.size < 1) return;
@@ -1189,6 +1470,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 this.initTron();
             } else if (slug === "bomberman") {
                 this.initBomberman();
+            } else if (slug === "motus") {
+                await this.initMotus();
             }
 
             this.state.status = "game";
@@ -1283,6 +1566,72 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                     }, 1500);
                 }
             }
+        },
+
+        "motus:guess": async (client: Client, data: { word: string }) => {
+            if (this.state.status !== "game") return;
+
+            let gs: MotusGameState;
+            try {
+                gs = JSON.parse(this.state.gameStateJson) as MotusGameState;
+            } catch { return; }
+
+            if (gs.phase !== "playing") return;
+
+            const sessionId = client.sessionId;
+            const player = gs.players[sessionId];
+            if (!player || player.eliminated) return;
+
+            // Coop: only current turn player
+            if (gs.mode === "coop" && sessionId !== gs.currentTurnId) return;
+
+            // VS: player already solved
+            if (gs.mode === "vs" && player.solved) return;
+
+            const normalized = this.normalizeMotusWord(data.word ?? "");
+
+            if (normalized.length !== gs.wordLength) return;
+            if (normalized[0] !== gs.firstLetter) return;
+
+            // Validate word exists in DB
+            const wordExists = await prisma.word.findUnique({ where: { text: normalized } });
+            if (!wordExists) {
+                client.send("motus:invalid", { reason: "unknown_word" });
+                return;
+            }
+
+            const result = this.computeMotusResult(this.motusSecret, normalized);
+            const guess: MotusGuess = { word: normalized, result };
+            const isSolved = result.every((r) => r === "correct");
+
+            if (gs.mode === "vs") {
+                player.guesses.push(guess);
+                if (isSolved) {
+                    player.solved = true;
+                    player.solvedAt = Date.now();
+                }
+                // Check if all non-eliminated players are done
+                const allDone = gs.playerOrder.every((id) => {
+                    const p = gs.players[id];
+                    if (!p || p.eliminated) return true;
+                    return this.isMotusPlayerDone(gs, id);
+                });
+                if (allDone) {
+                    this.endMotusRound(gs, null);
+                }
+            } else {
+                // Coop
+                gs.sharedGuesses.push(guess);
+                if (isSolved) {
+                    this.endMotusRound(gs, sessionId);
+                } else if (gs.maxAttempts > 0 && gs.sharedGuesses.length >= gs.maxAttempts) {
+                    this.endMotusRound(gs, null);
+                } else {
+                    gs.currentTurnId = this.nextCoopPlayer(gs);
+                }
+            }
+
+            this.state.gameStateJson = JSON.stringify(gs);
         },
 
         "tron:input": (client: Client, data: { dir: string }) => {

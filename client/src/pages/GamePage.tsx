@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, LobbyState, MemoryGameState, TronGameState, BombermanGameState, ChatMsg } from "../models/Lobby";
+import type { LobbyPlayer, LobbyState, MemoryGameState, TronGameState, BombermanGameState, MotusGameState, ChatMsg } from "../models/Lobby";
 import { joinLobby } from "../services/lobbyService";
 import { getStoredPlayer } from "../services/playerService";
 import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
@@ -9,6 +9,7 @@ import { colyseusClient } from "../webservices/colyseus";
 import MemoryGame from "../components/games/MemoryGame";
 import TronGame from "../components/games/TronGame";
 import BombermanGame from "../components/games/BombermanGame";
+import MotusGame from "../components/games/MotusGame";
 
 // ── Reconnection token persistence ─────────────────────────────────────────
 function tokenKey(roomId: string) { return `reconnect_${roomId}`; }
@@ -63,6 +64,7 @@ export default function GamePage() {
     const [memoryState, setMemoryState] = useState<MemoryGameState | null>(null);
     const [tronState, setTronState] = useState<TronGameState | null>(null);
     const [bombermanState, setBombermanState] = useState<BombermanGameState | null>(null);
+    const [motusState, setMotusState] = useState<MotusGameState | null>(null);
 
     function openBroadcastChannel(id: string) {
         broadcastChannelRef.current?.close();
@@ -102,6 +104,8 @@ export default function GamePage() {
                 setTronState(gs as unknown as TronGameState);
             } else if (gs["cols"] !== undefined && gs["bombs"]) {
                 setBombermanState(gs as unknown as BombermanGameState);
+            } else if (gs["wordLength"] !== undefined && gs["playerOrder"]) {
+                setMotusState(gs as unknown as MotusGameState);
             }
         } catch {
             // ignore parse errors
@@ -302,6 +306,14 @@ export default function GamePage() {
                     room={roomRef.current!}
                     sessionId={sessionId}
                     gameState={bombermanState}
+                    players={players}
+                    chatMessages={chatMessages}
+                />
+            ) : slug === "motus" && motusState ? (
+                <MotusGame
+                    room={roomRef.current!}
+                    sessionId={sessionId}
+                    gameState={motusState}
                     players={players}
                     chatMessages={chatMessages}
                 />

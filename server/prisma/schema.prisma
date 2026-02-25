@@ -36,3 +36,15 @@ model Player {
   @@map("players")
   @@schema("games")
 }
+
+model Word {
+  id          Int     @id @default(autoincrement())
+  text        String  @unique
+  length      Int
+  frequency   Float
+  isGuessable Boolean
+
+  @@index([length, isGuessable, frequency])
+  @@map("words")
+  @@schema("games")
+}

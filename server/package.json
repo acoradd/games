@@ -15,7 +15,8 @@
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "clean": "rimraf build",
     "test": "mocha -r tsx test/**.test.ts --exit --timeout 15000",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "import:words": "tsx src/scripts/importWords.ts"
   },
   "author": "",
   "license": "UNLICENSED",

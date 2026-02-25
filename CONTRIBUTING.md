@@ -50,7 +50,7 @@ Follow these steps to add a new game mode end-to-end.
 
 ### 1. Database
 
-Add a row in `server/prisma/seed.ts` and re-seed:
+Add a row in `server/prisma/scripts/seed.ts` and re-seed:
 
 ```bash
 cd server && npm run seed
