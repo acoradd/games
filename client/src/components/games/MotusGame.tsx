@@ -31,44 +31,38 @@ function computeLetterStates(guesses: MotusGuess[]): Record<string, MotusLetterR
     return states;
 }
 
-/** Tailwind classes for cell size, responsive to word length. */
-function cellSizeClass(wordLength: number): string {
-    if (wordLength <= 6)  return "w-14 h-14 text-xl";
-    if (wordLength <= 8)  return "w-12 h-12 text-lg";
-    if (wordLength <= 10) return "w-11 h-11 text-base";
-    return "w-9 h-9 text-sm";
-}
-
 // ── LetterCell ────────────────────────────────────────────────────────────────
 
 function LetterCell({
-    letter, result, locked, cursor, sizeClass,
+    letter, result, locked, cursor,
 }: {
-    letter:    string;
-    result?:   MotusLetterResult | null;
-    locked?:   boolean;   // first letter of empty / active row
-    cursor?:   boolean;   // next position to type
-    sizeClass: string;
+    letter:  string;
+    result?: MotusLetterResult | null;
+    locked?: boolean;
+    cursor?: boolean;
 }) {
-    let style: string;
+    let bg: string;
     if (locked) {
-        style = "bg-green-700 border-green-500 text-white";
+        bg = "bg-green-700 border-green-500 text-white";
     } else if (result === "correct") {
-        style = "bg-green-600 border-green-500 text-white";
+        bg = "bg-green-600 border-green-500 text-white";
     } else if (result === "misplaced") {
-        style = "bg-amber-500 border-amber-400 text-white";
+        bg = "bg-amber-500 border-amber-400 text-white";
     } else if (result === "absent") {
-        style = "bg-gray-700 border-gray-600 text-gray-400";
+        bg = "bg-gray-700 border-gray-600 text-gray-400";
     } else if (letter) {
-        style = "bg-gray-700 border-gray-400 text-white";
+        bg = "bg-gray-700 border-gray-400 text-white";
     } else if (cursor) {
-        style = "bg-gray-800 border-indigo-400 text-transparent";
+        bg = "bg-gray-800 border-indigo-400 text-transparent";
     } else {
-        style = "bg-gray-800 border-gray-700 text-transparent";
+        bg = "bg-gray-800 border-gray-700 text-transparent";
     }
 
     return (
-        <div className={`${sizeClass} flex items-center justify-center rounded-md font-bold uppercase border-2 select-none transition-colors duration-100 ${style} ${cursor ? "animate-pulse" : ""}`}>
+        <div
+            className={`flex-1 aspect-square flex items-center justify-center rounded-md font-bold uppercase border-2 select-none transition-colors duration-100 ${bg} ${cursor ? "animate-pulse" : ""}`}
+            style={{ fontSize: "clamp(0.6rem, 3.5vw, 1.4rem)" }}
+        >
             {letter}
         </div>
     );
@@ -87,62 +81,39 @@ function MotusGrid({
     isActive:    boolean;
     shake:       boolean;
 }) {
-    const rows      = maxAttempts > 0 ? maxAttempts : Math.max(guesses.length + 1, 6);
-    const sizeClass = cellSizeClass(wordLength);
+    const rows       = maxAttempts > 0 ? maxAttempts : Math.max(guesses.length + 1, 6);
     const currentRow = guesses.length;
 
     return (
-        <div className="flex flex-col gap-2">
+        // Cap cell width at ~4rem; grid fills available space below that.
+        <div className="w-full flex flex-col gap-1" style={{ maxWidth: `min(100%, ${wordLength * 4.25}rem)` }}>
             {Array.from({ length: rows }, (_, rowIdx) => {
                 const guess        = guesses[rowIdx] ?? null;
                 const isCurrentRow = rowIdx === currentRow && isActive;
                 const isShaking    = isCurrentRow && shake;
 
                 return (
-                    <div key={rowIdx} className={`flex gap-1.5 ${isShaking ? "animate-shake" : ""}`}>
+                    <div key={rowIdx} className={`flex gap-1 ${isShaking ? "animate-shake" : ""}`}>
                         {Array.from({ length: wordLength }, (_, colIdx) => {
-                            // ── past guess row ──
                             if (guess) {
                                 return (
                                     <LetterCell
                                         key={colIdx}
                                         letter={guess.word[colIdx] ?? ""}
                                         result={guess.result[colIdx] ?? null}
-                                        sizeClass={sizeClass}
                                     />
                                 );
                             }
-
-                            // ── col 0: always show first letter as locked ──
                             if (colIdx === 0) {
-                                return (
-                                    <LetterCell
-                                        key={colIdx}
-                                        letter={firstLetter}
-                                        locked
-                                        sizeClass={sizeClass}
-                                    />
-                                );
+                                return <LetterCell key={colIdx} letter={firstLetter} locked />;
                             }
-
-                            // ── future empty row ──
                             if (!isCurrentRow) {
-                                return <LetterCell key={colIdx} letter="" sizeClass={sizeClass} />;
+                                return <LetterCell key={colIdx} letter="" />;
                             }
-
-                            // ── active row: show typed letters + cursor ──
                             const typedIdx = colIdx - 1;
                             const letter   = typedInput[typedIdx] ?? "";
                             const isCursor = typedIdx === typedInput.length && typedInput.length < wordLength - 1;
-
-                            return (
-                                <LetterCell
-                                    key={colIdx}
-                                    letter={letter}
-                                    cursor={isCursor}
-                                    sizeClass={sizeClass}
-                                />
-                            );
+                            return <LetterCell key={colIdx} letter={letter} cursor={isCursor} />;
                         })}
                     </div>
                 );
@@ -169,16 +140,23 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
         return "bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500";
     }
 
+    // Font scales with the key width (which scales with viewport)
+    const keyFont: React.CSSProperties = { fontSize: "clamp(0.55rem, 2.2vw, 0.9rem)" };
+
     return (
-        <div className={`flex flex-col gap-1.5 items-center select-none ${disabled ? "opacity-30 pointer-events-none" : ""}`}>
+        <div
+            className={`w-full flex flex-col gap-1 select-none ${disabled ? "opacity-30 pointer-events-none" : ""}`}
+            style={{ maxWidth: "min(100%, 38rem)" }}
+        >
             {AZERTY_ROWS.map((row, ri) => (
-                <div key={ri} className="flex gap-1 items-center">
+                <div key={ri} className="flex gap-1">
 
                     {ri === 2 && (
                         <button
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={onEnter}
-                            className="h-10 px-3 rounded font-bold text-sm bg-indigo-700 border border-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-500 transition-colors"
+                            style={{ flex: "1.6", ...keyFont }}
+                            className="h-10 rounded font-bold bg-indigo-700 border border-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-500 transition-colors"
                         >
                             ↵
                         </button>
@@ -189,7 +167,8 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
                             key={letter}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => onKey(letter)}
-                            className={`w-9 h-10 rounded font-bold uppercase text-sm border transition-colors ${keyStyle(letter)}`}
+                            style={{ flex: "1", ...keyFont }}
+                            className={`min-w-0 h-10 rounded font-bold uppercase border transition-colors ${keyStyle(letter)}`}
                         >
                             {letter.toUpperCase()}
                         </button>
@@ -199,7 +178,8 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
                         <button
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={onBackspace}
-                            className="h-10 px-3 rounded font-bold text-sm bg-gray-700 border border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500 transition-colors"
+                            style={{ flex: "1.6", ...keyFont }}
+                            className="h-10 rounded font-bold bg-gray-700 border border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500 transition-colors"
                         >
                             ←
                         </button>
@@ -551,7 +531,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                 ref={containerRef}
                 tabIndex={canGuess ? 0 : -1}
                 onKeyDown={handleKeyDown}
-                className="w-full flex flex-col gap-5 items-center outline-none"
+                className="h-full w-full flex flex-col justify-between items-center outline-none"
             >
                 {/* Main grid */}
                 <MotusGrid
