@@ -312,7 +312,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                         <div className="pointer-events-auto">
                             <DPad
                                 onDir={(dir) => room.send("bomberman:move", { dir })}
-                                repeatMs={80}
+                                repeatMs={200}
                             />
                         </div>
                         <button
