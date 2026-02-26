@@ -1,14 +1,14 @@
-import type { GameMode } from "../models/GameMode";
+import type {GameMode} from '../models/GameMode';
 
 interface GameCardProps {
     gameMode: GameMode;
-    onCreateRoom: (slug: string) => void;
 }
 
-export default function GameCard({ gameMode, onCreateRoom }: GameCardProps) {
+export default function GameCard({gameMode}: GameCardProps) {
     const thumbnailUrl = `/assets/games/${gameMode.slug}/thumbnail.png`;
     return (
-        <div className="bg-gray-800 rounded-xl p-6 flex flex-col gap-4 border border-gray-700 hover:border-indigo-500 transition-colors">
+        <div
+            className="bg-gray-800 rounded-xl p-6 flex flex-col gap-4 border border-gray-700 hover:border-indigo-500 transition-colors">
             <img
                 src={thumbnailUrl}
                 alt={gameMode.name}
@@ -23,13 +23,6 @@ export default function GameCard({ gameMode, onCreateRoom }: GameCardProps) {
                     {gameMode.minPlayers}–{gameMode.maxPlayers} joueurs
                 </p>
             </div>
-
-            <button
-                onClick={() => onCreateRoom(gameMode.slug)}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg transition-colors"
-            >
-                Créer une partie
-            </button>
         </div>
     );
 }

@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, ChatMsg, LobbyState } from "../models/Lobby";
-import type { GameMode, GameOptionsValues } from "../models/GameMode";
-import { joinLobby } from "../services/lobbyService";
-import { getStoredPlayer } from "../services/playerService";
-import { getGameModes } from "../services/gameModeService";
-import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
+import type {Room} from '@colyseus/sdk';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {useLocation, useNavigate, useParams} from 'react-router-dom';
+import type {GameMode, GameOptionsValues} from '../models/GameMode';
+import type {ChatMsg, LobbyPlayer, LobbyState} from '../models/Lobby';
+import {getGameModes} from '../services/gameModeService';
+import {joinLobby} from '../services/lobbyService';
+import {getStoredPlayer} from '../services/playerService';
+import {clearCurrentRoom, getCurrentRoom, setCurrentRoom} from '../webservices/currentLobbyRoom';
 
 function getThumbnailUrl(slug: string) {
     return `/assets/games/${slug}/thumbnail.png`;
@@ -14,11 +14,11 @@ function getThumbnailUrl(slug: string) {
 
 // ── Composant options ─────────────────────────────────────────────────────────
 function GameOptions({
-    game,
-    values,
-    isHost,
-    onChange,
-}: {
+                         game,
+                         values,
+                         isHost,
+                         onChange
+                     }: {
     game: GameMode;
     values: GameOptionsValues;
     isHost: boolean;
@@ -34,7 +34,7 @@ function GameOptions({
                 return (
                     <div key={key} className="flex items-center justify-between gap-4">
                         <label className="text-sm text-gray-300 shrink-0">{def.label}</label>
-                        {def.type === "range" && (
+                        {def.type === 'range' && (
                             <div className="flex items-center gap-2 flex-1 justify-end">
                                 <input
                                     type="range"
@@ -49,7 +49,7 @@ function GameOptions({
                                 <span className="text-white text-sm w-6 text-right">{current}</span>
                             </div>
                         )}
-                        {def.type === "select" && (
+                        {def.type === 'select' && (
                             <select
                                 value={current as string}
                                 disabled={!isHost}
@@ -61,17 +61,17 @@ function GameOptions({
                                 ))}
                             </select>
                         )}
-                        {def.type === "toggle" && (
+                        {def.type === 'toggle' && (
                             <button
                                 disabled={!isHost}
                                 onClick={() => isHost && onChange(key, !current)}
                                 className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
                                     current
-                                        ? "bg-indigo-600 text-white"
-                                        : "bg-gray-700 text-gray-400"
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-700 text-gray-400'
                                 }`}
                             >
-                                {current ? "Activé" : "Désactivé"}
+                                {current ? 'Activé' : 'Désactivé'}
                             </button>
                         )}
                     </div>
@@ -83,7 +83,7 @@ function GameOptions({
 
 // ── Page principale ───────────────────────────────────────────────────────────
 export default function LobbyPage() {
-    const { roomId = "" } = useParams<{ roomId: string }>();
+    const {roomId = ''} = useParams<{ roomId: string }>();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -94,19 +94,19 @@ export default function LobbyPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [sessionId, setSessionId] = useState("");
+    const [sessionId, setSessionId] = useState('');
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
-    const [hostId, setHostId] = useState("");
-    const [selectedSlug, setSelectedSlug] = useState("");
+    const [hostId, setHostId] = useState('');
+    const [selectedSlug, setSelectedSlug] = useState('');
     const [gameOptions, setGameOptions] = useState<GameOptionsValues>({});
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
 
     const [gameModes, setGameModes] = useState<GameMode[]>([]);
-    const [chatInput, setChatInput] = useState("");
-    const [copied, setCopied] = useState<"code" | "link" | null>(null);
-    const [mobileTab, setMobileTab] = useState<"jeu" | "joueurs" | "chat">("jeu");
+    const [chatInput, setChatInput] = useState('');
+    const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+    const [mobileTab, setMobileTab] = useState<'jeu' | 'joueurs' | 'chat'>('jeu');
 
-    const isHost = sessionId !== "" && sessionId === hostId;
+    const isHost = sessionId !== '' && sessionId === hostId;
     const selectedGame = gameModes.find((g) => g.slug === selectedSlug) ?? null;
 
     // ── Sync state depuis Colyseus ──────────────────────────────────────────
@@ -117,40 +117,44 @@ export default function LobbyPage() {
 
         // Players
         const list: LobbyPlayer[] = [];
-        const playersRaw = s["players"];
+        const playersRaw = s['players'];
         if (playersRaw) {
-            if (typeof (playersRaw as Map<string, unknown>).forEach === "function") {
+            if (typeof (playersRaw as Map<string, unknown>).forEach === 'function') {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
-                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
+                    list.push({
+                        id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                        isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false
+                    })
                 );
             } else {
                 // fallback plain object
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
-                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
+                    list.push({
+                        id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                        isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false
+                    })
                 );
             }
         }
         setPlayers(list);
-        setHostId((s["hostId"] as string) ?? "");
-        setSelectedSlug((s["selectedGameSlug"] as string) ?? "");
+        setHostId((s['hostId'] as string) ?? '');
+        setSelectedSlug((s['selectedGameSlug'] as string) ?? '');
 
         try {
-            setGameOptions(JSON.parse((s["gameOptionsJson"] as string) ?? "{}") as GameOptionsValues);
+            setGameOptions(JSON.parse((s['gameOptionsJson'] as string) ?? '{}') as GameOptionsValues);
         } catch {
             setGameOptions({});
         }
 
         // Chat
         const chat: ChatMsg[] = [];
-        const historyRaw = s["chatHistory"];
+        const historyRaw = s['chatHistory'];
         if (historyRaw) {
-            const iter = typeof (historyRaw as { forEach?: unknown }).forEach === "function"
+            const iter = typeof (historyRaw as { forEach?: unknown }).forEach === 'function'
                 ? historyRaw as Iterable<{ username: string; text: string; timestamp: number }>
                 : Object.values(historyRaw as object) as { username: string; text: string; timestamp: number }[];
             for (const m of iter as { username: string; text: string; timestamp: number }[]) {
-                chat.push({ username: m.username, text: m.text, ts: m.timestamp });
+                chat.push({username: m.username, text: m.text, ts: m.timestamp});
             }
         }
         setChatMessages(chat);
@@ -162,7 +166,7 @@ export default function LobbyPage() {
         let cancelled = false;
 
         if (!getStoredPlayer()) {
-            navigate("/", { state: { returnTo: location.pathname } });
+            navigate('/', {state: {returnTo: location.pathname}});
             return;
         }
 
@@ -172,7 +176,10 @@ export default function LobbyPage() {
                 if (!room) {
                     room = await joinLobby(roomId);
                 }
-                if (cancelled) { room.leave(); return; }
+                if (cancelled) {
+                    room.leave();
+                    return;
+                }
 
                 roomRef.current = room;
                 setCurrentRoom(room);
@@ -187,14 +194,14 @@ export default function LobbyPage() {
                     syncState(state as unknown as LobbyState);
                 });
 
-                room.onMessage("game:start", ({ gameSlug, roomId: gRoomId }: { gameSlug: string; roomId: string }) => {
+                room.onMessage('game:start', ({gameSlug, roomId: gRoomId}: { gameSlug: string; roomId: string }) => {
                     startingGameRef.current = true;
                     navigate(`/game/${gameSlug}/play/${gRoomId}`);
                 });
 
                 setLoading(false);
             } catch (err: unknown) {
-                console.error("[LobbyPage] connect error:", err);
+                console.error('[LobbyPage] connect error:', err);
                 if (!cancelled) {
                     const msg = err instanceof Error ? err.message : String(err);
                     setError(`Erreur de connexion — ${msg}`);
@@ -218,42 +225,42 @@ export default function LobbyPage() {
                 roomRef.current = null;
             }
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId]);
 
     // ── Auto-scroll chat ────────────────────────────────────────────────────
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        chatEndRef.current?.scrollIntoView({behavior: 'smooth'});
     }, [chatMessages]);
 
     // ── Actions ─────────────────────────────────────────────────────────────
     function handleSelectGame(slug: string) {
-        roomRef.current?.send("selectGame", { slug });
+        roomRef.current?.send('selectGame', {slug});
     }
 
     function handleOptionChange(key: string, value: number | string | boolean) {
-        const next = { ...gameOptions, [key]: value };
+        const next = {...gameOptions, [key]: value};
         setGameOptions(next);
-        roomRef.current?.send("setOptions", { options: next });
+        roomRef.current?.send('setOptions', {options: next});
     }
 
     function handleReady() {
-        roomRef.current?.send("ready");
+        roomRef.current?.send('ready');
     }
 
     function handleStart() {
-        roomRef.current?.send("start");
+        roomRef.current?.send('start');
     }
 
     function handleChat(e: React.FormEvent) {
         e.preventDefault();
         if (!chatInput.trim()) return;
-        roomRef.current?.send("chat", { text: chatInput.trim() });
-        setChatInput("");
+        roomRef.current?.send('chat', {text: chatInput.trim()});
+        setChatInput('');
     }
 
-    async function handleCopy(type: "code" | "link") {
-        const text = type === "code"
+    async function handleCopy(type: 'code' | 'link') {
+        const text = type === 'code'
             ? roomId
             : `${window.location.origin}/lobby/${roomId}`;
         await navigator.clipboard.writeText(text);
@@ -278,7 +285,7 @@ export default function LobbyPage() {
             <div className="h-dvh bg-gray-950 text-white flex items-center justify-center p-4">
                 <div className="text-center">
                     <p className="text-red-400 mb-4">{error}</p>
-                    <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white underline text-sm">
+                    <button onClick={() => navigate('/')} className="text-gray-400 hover:text-white underline text-sm">
                         Retour à l'accueil
                     </button>
                 </div>
@@ -292,7 +299,8 @@ export default function LobbyPage() {
 
             {/* ── Header ── */}
             <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-4 flex-wrap">
-                <button onClick={() => navigate("/")} className="text-gray-500 hover:text-gray-300 text-sm transition-colors">
+                <button onClick={() => navigate('/')}
+                        className="text-gray-500 hover:text-gray-300 text-sm transition-colors">
                     ← Accueil
                 </button>
                 <span className="text-gray-700">|</span>
@@ -303,36 +311,36 @@ export default function LobbyPage() {
                         <span className="text-gray-500 text-xs">Code</span>
                         <span className="font-mono font-bold text-white tracking-widest text-sm">{roomId}</span>
                         <button
-                            onClick={() => handleCopy("code")}
+                            onClick={() => handleCopy('code')}
                             className="text-gray-400 hover:text-white text-xs transition-colors"
                             title="Copier le code"
                         >
-                            {copied === "code" ? "✓" : "📋"}
+                            {copied === 'code' ? '✓' : '📋'}
                         </button>
                     </div>
                     {/* Lien */}
                     <button
-                        onClick={() => handleCopy("link")}
+                        onClick={() => handleCopy('link')}
                         className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg px-3 py-1.5 text-sm transition-colors"
                     >
-                        🔗 {copied === "link" ? "Lien copié ✓" : "Copier le lien"}
+                        🔗 {copied === 'link' ? 'Lien copié ✓' : 'Copier le lien'}
                     </button>
                 </div>
             </header>
 
             {/* ── Onglets mobiles ── */}
             <div className="lg:hidden flex border-b border-gray-800 shrink-0">
-                {(["jeu", "joueurs", "chat"] as const).map((tab) => (
+                {(['jeu', 'joueurs', 'chat'] as const).map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setMobileTab(tab)}
                         className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
                             mobileTab === tab
-                                ? "border-b-2 border-indigo-500 text-white"
-                                : "text-gray-500 hover:text-gray-300"
+                                ? 'border-b-2 border-indigo-500 text-white'
+                                : 'text-gray-500 hover:text-gray-300'
                         }`}
                     >
-                        {tab === "joueurs" ? `Joueurs (${players.length})` : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        {tab === 'joueurs' ? `Joueurs (${players.length})` : tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </button>
                 ))}
             </div>
@@ -341,12 +349,13 @@ export default function LobbyPage() {
             <div className="flex flex-1 min-h-0 overflow-hidden">
 
                 {/* ── Panneau gauche : sélection / info du jeu ── */}
-                <main className={`${mobileTab !== "jeu" ? "hidden lg:block" : "block"} flex-1 overflow-y-auto p-4 lg:p-6 lg:border-r lg:border-gray-800`}>
+                <main
+                    className={`${mobileTab !== 'jeu' ? 'hidden lg:block' : 'block'} flex-1 overflow-y-auto p-4 lg:p-6 lg:border-r lg:border-gray-800`}>
                     {!selectedSlug ? (
                         /* Sélection du jeu */
                         <div>
                             <h2 className="text-lg font-semibold text-gray-300 mb-4">
-                                {isHost ? "Choisissez un jeu" : "En attente du choix de l'hôte…"}
+                                {isHost ? 'Choisissez un jeu' : 'En attente du choix de l\'hôte…'}
                             </h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {gameModes.map((gm) => {
@@ -380,7 +389,7 @@ export default function LobbyPage() {
                                     {/* Bannière du jeu */}
                                     <div
                                         className={`rounded-xl h-40 mb-5 relative`}
-                                        style={{ backgroundImage: getThumbnailUrl(selectedGame.slug) }}
+                                        style={{backgroundImage: getThumbnailUrl(selectedGame.slug)}}
                                     >
                                         <img
                                             src={getThumbnailUrl(selectedGame.slug)}
@@ -392,7 +401,7 @@ export default function LobbyPage() {
 
                                         {isHost && (
                                             <button
-                                                onClick={() => handleSelectGame("")}
+                                                onClick={() => handleSelectGame('')}
                                                 className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white text-xs px-2 py-1 rounded-lg transition-colors"
                                             >
                                                 Changer
@@ -417,10 +426,11 @@ export default function LobbyPage() {
                 </main>
 
                 {/* ── Panneau droit : joueurs + chat ── */}
-                <aside className={`${mobileTab === "jeu" ? "hidden lg:flex" : "flex"} w-full lg:w-80 flex-col lg:border-l lg:border-gray-800 shrink-0`}>
+                <aside
+                    className={`${mobileTab === 'jeu' ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 flex-col lg:border-l lg:border-gray-800 shrink-0`}>
 
                     {/* Joueurs */}
-                    <div className={`p-4 border-b border-gray-800 ${mobileTab === "chat" ? "hidden lg:block" : ""}`}>
+                    <div className={`p-4 border-b border-gray-800 ${mobileTab === 'chat' ? 'hidden lg:block' : ''}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">
                             Joueurs ({players.length})
                         </p>
@@ -428,7 +438,8 @@ export default function LobbyPage() {
                             {players.map((p) => (
                                 <li key={p.id} className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full shrink-0 ${p.isReady ? "bg-emerald-400" : "bg-gray-600"}`} />
+                                        <span
+                                            className={`w-2 h-2 rounded-full shrink-0 ${p.isReady ? 'bg-emerald-400' : 'bg-gray-600'}`}/>
                                         <span className="text-sm font-medium truncate max-w-28">
                                             {p.username}
                                             {p.id === sessionId && (
@@ -438,10 +449,11 @@ export default function LobbyPage() {
                                     </div>
                                     <div className="flex items-center gap-1.5 text-xs shrink-0">
                                         {p.isHost && (
-                                            <span className="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">host</span>
+                                            <span
+                                                className="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">host</span>
                                         )}
-                                        <span className={p.isReady ? "text-emerald-400" : "text-gray-600"}>
-                                            {p.isReady ? "prêt" : "attente"}
+                                        <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
+                                            {p.isReady ? 'prêt' : 'attente'}
                                         </span>
                                     </div>
                                 </li>
@@ -450,7 +462,7 @@ export default function LobbyPage() {
                     </div>
 
                     {/* Chat */}
-                    <div className={`flex-1 flex flex-col min-h-0 ${mobileTab === "joueurs" ? "hidden lg:flex" : ""}`}>
+                    <div className={`flex-1 flex flex-col min-h-0 ${mobileTab === 'joueurs' ? 'hidden lg:flex' : ''}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2">Chat</p>
 
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
@@ -460,21 +472,22 @@ export default function LobbyPage() {
                             {chatMessages.map((msg, i) => {
                                 const isMine = msg.username === players.find((p) => p.id === sessionId)?.username;
                                 return (
-                                    <div key={i} className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}>
+                                    <div key={i}
+                                         className={`flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
                                         {!isMine && (
                                             <span className="text-xs text-gray-500 px-1">{msg.username}</span>
                                         )}
                                         <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
                                             isMine
-                                                ? "bg-indigo-600 text-white rounded-tr-sm"
-                                                : "bg-gray-700 text-gray-100 rounded-tl-sm"
+                                                ? 'bg-indigo-600 text-white rounded-tr-sm'
+                                                : 'bg-gray-700 text-gray-100 rounded-tl-sm'
                                         }`}>
                                             {msg.text}
                                         </div>
                                     </div>
                                 );
                             })}
-                            <div ref={chatEndRef} />
+                            <div ref={chatEndRef}/>
                         </div>
 
                         <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-gray-800">
@@ -499,16 +512,17 @@ export default function LobbyPage() {
             </div>
 
             {/* ── Footer actions ── */}
-            <footer className="border-t border-gray-800 px-4 lg:px-6 py-3 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+            <footer
+                className="border-t border-gray-800 px-4 lg:px-6 py-3 flex items-center justify-between gap-3 shrink-0 flex-wrap">
                 <button
                     onClick={handleReady}
                     className={`px-5 py-2 rounded-lg font-semibold transition-colors ${
                         me?.isReady
-                            ? "bg-emerald-700 hover:bg-emerald-600 text-white"
-                            : "bg-gray-700 hover:bg-gray-600 text-white"
+                            ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-white'
                     }`}
                 >
-                    {me?.isReady ? "✓ Prêt" : "Prêt ?"}
+                    {me?.isReady ? '✓ Prêt' : 'Prêt ?'}
                 </button>
 
                 {isHost && (
@@ -518,10 +532,10 @@ export default function LobbyPage() {
                         className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors"
                     >
                         {!selectedSlug
-                            ? "Choisissez un jeu"
+                            ? 'Choisissez un jeu'
                             : !allReady
-                            ? "En attente des joueurs…"
-                            : `Lancer ${selectedGame?.name ?? ""} →`}
+                                ? 'En attente des joueurs…'
+                                : `Lancer ${selectedGame?.name ?? ''} →`}
                     </button>
                 )}
             </footer>

@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { createLobby } from "../services/lobbyService";
-import { getStoredPlayer } from "../services/playerService";
-import { setCurrentRoom } from "../webservices/currentLobbyRoom";
+import {useEffect, useRef} from 'react';
+import {useNavigate} from 'react-router-dom';
+import {createLobby} from '../services/lobbyService';
+import {getStoredPlayer} from '../services/playerService';
+import {setCurrentRoom} from '../webservices/currentLobbyRoom';
 
 export default function CreateLobbyPage() {
     const navigate = useNavigate();
@@ -13,18 +13,18 @@ export default function CreateLobbyPage() {
         creating.current = true;
 
         if (!getStoredPlayer()) {
-            navigate("/");
+            navigate('/');
             return;
         }
 
         createLobby()
             .then((room) => {
                 setCurrentRoom(room);
-                navigate(`/lobby/${room.roomId}`, { replace: true });
+                navigate(`/lobby/${room.roomId}`, {replace: true});
             })
             .catch((err) => {
                 console.error(err);
-                navigate("/");
+                navigate('/');
             });
     }, [navigate]);
 

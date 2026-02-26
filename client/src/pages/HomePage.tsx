@@ -92,7 +92,6 @@ export default function HomePage() {
                                     <GameCard
                                         key={gm.id}
                                         gameMode={gm}
-                                        onCreateRoom={handleCreateLobby}
                                     />
                                 ))}
                             </div>
