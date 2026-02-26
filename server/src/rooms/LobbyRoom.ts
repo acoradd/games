@@ -179,6 +179,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
     private playerIdMap = new Map<number, string>();
     private sessionToPlayerId = new Map<string, number>();
+    // Keeps the old sessionId of eliminated players so onJoin can clean up the stale entry
+    private staleSessionByPlayerId = new Map<number, string>();
 
     private currentTurnTimer: { clear(): void } | null = null;
 
@@ -227,6 +229,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     }
 
     onJoin(client: Client, _options: JoinOptions, auth: AuthPayload) {
+        // Remove the stale entry from a previous eliminated session so we don't get duplicates
+        const staleSessionId = this.staleSessionByPlayerId.get(auth.playerId);
+        if (staleSessionId) {
+            this.state.players.delete(staleSessionId);
+            this.staleSessionByPlayerId.delete(auth.playerId);
+        }
+
         const isFirstPlayer = this.state.players.size === 0;
 
         const player = new LobbyPlayer();
@@ -316,6 +325,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         const playerId = this.sessionToPlayerId.get(sessionId);
         if (playerId) {
+            this.staleSessionByPlayerId.set(playerId, sessionId); // for dedup on rejoin
             this.playerIdMap.delete(playerId);
             this.sessionToPlayerId.delete(sessionId);
         }
@@ -1419,6 +1429,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.clearTurnTimer();
             this.stopGameLoop();
             this.prevRound = null;
+            this.staleSessionByPlayerId.clear();
             this.state.isStarted = false;
             this.state.status = "lobby";
             this.state.gameStateJson = "{}";
