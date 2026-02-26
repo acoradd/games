@@ -159,7 +159,20 @@ const FUSE_TICKS = 20;
 const EXPLOSION_TICKS = 5;
 const INVINCIBLE_TICKS = 8;
 const BONUS_DROP_RATE = 0.3;
-const SPAWN_SAFE_OFFSETS = [[1, 0], [0, 1], [1, 1]];
+/** Clear a 3×3 area around a spawn corner, expanding inward from the edge. */
+function clearSpawnZone(grid: string[], cx: number, cy: number, cols: number, rows: number) {
+    const dx = cx === 0 ? 1 : -1;
+    const dy = cy === 0 ? 1 : -1;
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+            const sx = cx + i * dx;
+            const sy = cy + j * dy;
+            if (sx >= 0 && sx < cols && sy >= 0 && sy < rows) {
+                grid[sy * cols + sx] = "0";
+            }
+        }
+    }
+}
 
 export class LobbyRoom extends Room<{ state: LobbyState }> {
     maxClients = 8;
@@ -1092,15 +1105,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
 
         for (const [cx, cy] of spawnCorners) {
-            const cornerIdx = cy! * cols + cx!;
-            grid[cornerIdx] = "0";
-            for (const [ox, oy] of SPAWN_SAFE_OFFSETS) {
-                const sx = cx! + ox!;
-                const sy = cy! + oy!;
-                if (sx >= 0 && sx < cols && sy >= 0 && sy < rows) {
-                    grid[sy * cols + sx] = "0";
-                }
-            }
+            clearSpawnZone(grid, cx!, cy!, cols, rows);
         }
 
         for (let i = 0; i < grid.length; i++) {
@@ -1109,16 +1114,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             }
         }
 
+        // Re-clear after crate placement so spawn zones are always free
         for (const [cx, cy] of spawnCorners) {
-            const cornerIdx = cy! * cols + cx!;
-            grid[cornerIdx] = "0";
-            for (const [ox, oy] of SPAWN_SAFE_OFFSETS) {
-                const sx = cx! + ox!;
-                const sy = cy! + oy!;
-                if (sx >= 0 && sx < cols && sy >= 0 && sy < rows) {
-                    grid[sy * cols + sx] = "0";
-                }
-            }
+            clearSpawnZone(grid, cx!, cy!, cols, rows);
         }
 
         const bombermanColors = ["#00e5ff", "#ff1744", "#76ff03", "#ff6d00"];
