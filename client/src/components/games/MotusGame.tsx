@@ -151,37 +151,6 @@ function MotusGrid({
     );
 }
 
-// ── MiniGrid (VS — colors only, letters hidden) ───────────────────────────────
-
-function MiniGrid({ guesses, wordLength, name, isSolved }: {
-    guesses:    MotusGuess[];
-    wordLength: number;
-    name:       string;
-    isSolved:   boolean;
-}) {
-    return (
-        <div className="flex flex-col gap-1 min-w-0">
-            <p className={`text-xs font-semibold mb-0.5 truncate max-w-[8rem] ${isSolved ? "text-green-400" : "text-gray-400"}`}>
-                {name}{isSolved ? " ✓" : guesses.length > 0 ? ` · ${guesses.length} essai${guesses.length > 1 ? "s" : ""}` : ""}
-            </p>
-            {guesses.map((g, i) => (
-                <div key={i} className="flex gap-0.5">
-                    {Array.from({ length: wordLength }, (_, j) => {
-                        const r = g.result[j] ?? "absent";
-                        return (
-                            <div key={j} className={`w-4 h-4 rounded-sm ${
-                                r === "correct"   ? "bg-green-600" :
-                                r === "misplaced" ? "bg-amber-500" :
-                                "bg-gray-600"
-                            }`} />
-                        );
-                    })}
-                </div>
-            ))}
-            {guesses.length === 0 && <p className="text-[10px] text-gray-600">En cours…</p>}
-        </div>
-    );
-}
 
 // ── AZERTY keyboard ───────────────────────────────────────────────────────────
 
@@ -254,9 +223,9 @@ interface Props {
 export default function MotusGame({ room, sessionId, gameState, players, chatMessages }: Props) {
     const {
         phase, mode, wordLength, firstLetter, secretWord, maxAttempts,
-        roundDeadline, players: gsPlayers, playerOrder, sharedGuesses,
+        roundDeadline, players: gsPlayers, sharedGuesses,
         currentTurnId, playerNames, currentRound, maxRounds,
-        roundPoints, roundWinnerIds,
+        roundPoints, roundWinnerIds, roundStartedAt,
     } = gameState;
 
     const isHost   = players.find((p) => p.id === sessionId)?.isHost ?? false;
@@ -391,30 +360,60 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">
                 {maxRounds > 1 ? "Points" : "Joueurs"}
             </p>
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-3">
                 {rankedByPoints.map((id) => {
-                    const p            = playerById.get(id);
-                    const isElim       = gsPlayers[id]?.eliminated ?? p?.isEliminated ?? false;
-                    const isConnected  = p?.isConnected ?? true;
-                    const isMe         = id === sessionId;
-                    const solved       = gsPlayers[id]?.solved ?? false;
-                    const pts          = roundPoints[id] ?? 0;
-                    const isCoopTurn   = mode === "coop" && id === currentTurnId;
+                    const p           = playerById.get(id);
+                    const ps          = gsPlayers[id];
+                    const isElim      = ps?.eliminated ?? p?.isEliminated ?? false;
+                    const isConnected = p?.isConnected ?? true;
+                    const isMe        = id === sessionId;
+                    const solved      = ps?.solved ?? false;
+                    const pts         = roundPoints[id] ?? 0;
+                    const isCoopTurn  = mode === "coop" && id === currentTurnId;
+
+                    // Guess info for VS mode
+                    const guessCount  = mode === "vs" ? (ps?.guesses.length ?? 0) : 0;
+                    const lastGuess   = mode === "vs" ? (ps?.guesses[guessCount - 1] ?? null) : null;
+                    const elapsedSec  = solved && roundStartedAt && ps?.solvedAt
+                        ? Math.round((ps.solvedAt - roundStartedAt) / 1000)
+                        : null;
 
                     return (
-                        <li key={id} className={`flex items-center justify-between gap-1 text-sm ${
+                        <li key={id} className={`flex flex-col gap-1 text-sm ${
                             isElim ? "text-gray-600" : isCoopTurn ? "text-indigo-300" : "text-gray-300"
                         }`}>
-                            <span className={`truncate flex items-center gap-1 ${isElim ? "line-through" : ""}`}>
+                            {/* Name row */}
+                            <span className={`flex items-center gap-1 truncate ${isElim ? "line-through" : ""}`}>
                                 {isCoopTurn  && <span className="text-indigo-400">▶</span>}
                                 {solved && !isElim && <span className="text-green-400">✓</span>}
                                 {!isConnected && !isElim && <span title="Reconnexion…">🔴</span>}
-                                {playerNames[id] ?? id}
-                                {isMe   && <span className="text-gray-600 text-xs">(vous)</span>}
-                                {isElim && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
+                                <span className="truncate">{playerNames[id] ?? id}</span>
+                                {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
+                                {isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">(éliminé)</span>}
+                                {maxRounds > 1 && (
+                                    <span className="font-bold shrink-0 text-indigo-400 ml-auto">{pts}pt</span>
+                                )}
                             </span>
-                            {maxRounds > 1 && (
-                                <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>
+                            {/* VS: attempt count + elapsed + last guess colors */}
+                            {mode === "vs" && !isElim && (
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-xs text-gray-500">
+                                        {guessCount > 0
+                                            ? `${guessCount} essai${guessCount > 1 ? "s" : ""}${elapsedSec !== null ? ` · ${elapsedSec}s` : ""}`
+                                            : "Aucune tentative"}
+                                    </span>
+                                    {lastGuess && (
+                                        <div className="flex gap-0.5">
+                                            {lastGuess.result.map((r, i) => (
+                                                <div key={i} className={`w-3.5 h-3.5 rounded-sm shrink-0 ${
+                                                    r === "correct"   ? "bg-green-600" :
+                                                    r === "misplaced" ? "bg-amber-500" :
+                                                    "bg-gray-600"
+                                                }`} />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </li>
                     );
@@ -547,29 +546,8 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                 ref={containerRef}
                 tabIndex={canGuess ? 0 : -1}
                 onKeyDown={handleKeyDown}
-                className="w-full max-w-2xl flex flex-col gap-5 items-center outline-none"
+                className="w-full flex flex-col gap-5 items-center outline-none"
             >
-                {/* VS mode: other players' mini-grids (colors only, no letters) */}
-                {mode === "vs" && playerOrder.filter((id) => id !== sessionId).length > 0 && (
-                    <div className="w-full flex flex-wrap gap-5 justify-center">
-                        {playerOrder
-                            .filter((id) => id !== sessionId)
-                            .map((id) => {
-                                const ps = gsPlayers[id];
-                                if (!ps) return null;
-                                return (
-                                    <MiniGrid
-                                        key={id}
-                                        guesses={ps.guesses}
-                                        wordLength={wordLength}
-                                        name={playerNames[id] ?? id}
-                                        isSolved={ps.solved}
-                                    />
-                                );
-                            })}
-                    </div>
-                )}
-
                 {/* Main grid */}
                 <MotusGrid
                     guesses={myGuesses}

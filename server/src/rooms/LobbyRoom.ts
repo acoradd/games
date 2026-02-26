@@ -138,6 +138,7 @@ interface MotusGameState {
     maxRounds:      number;
     roundPoints:    Record<string, number>;
     roundWinnerIds: string[];
+    roundStartedAt: number;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -700,6 +701,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             players[id] = { guesses: [], solved: false, solvedAt: 0, eliminated: false };
         });
 
+        const now = Date.now();
         const gs: MotusGameState = {
             phase: "playing",
             mode,
@@ -707,7 +709,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             firstLetter: wordRow.text[0]!,
             secretWord: null,
             maxAttempts,
-            roundDeadline: timeLimit > 0 ? Date.now() + timeLimit * 1000 : 0,
+            roundDeadline: timeLimit > 0 ? now + timeLimit * 1000 : 0,
             players,
             playerOrder: playerIds,
             sharedGuesses: [],
@@ -717,6 +719,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             maxRounds,
             roundPoints,
             roundWinnerIds: [],
+            roundStartedAt: now,
         };
 
         this.state.gameStateJson = JSON.stringify(gs);

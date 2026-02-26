@@ -134,4 +134,5 @@ export interface MotusGameState {
     maxRounds:      number;
     roundPoints:    Record<string, number>;
     roundWinnerIds: string[];
+    roundStartedAt: number;
 }
