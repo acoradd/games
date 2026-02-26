@@ -2,6 +2,11 @@ import { useRef } from "react";
 
 type Dir = "up" | "down" | "left" | "right";
 
+/** True if the device has at least one touch point (phone, tablet, hybrid). */
+export function isTouchDevice(): boolean {
+    return navigator.maxTouchPoints > 0;
+}
+
 /**
  * Mobile D-pad overlay.
  * - Sends the direction immediately on pointer down.

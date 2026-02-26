@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, BombermanGameState, ChatMsg } from "../../models/Lobby";
 import GameShell from "./GameShell";
-import DPad from "./DPad";
+import DPad, { isTouchDevice } from "./DPad";
 
 interface Props {
     room: Room<LobbyState>;
@@ -307,8 +307,8 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
         >
             <div className="relative w-full h-full flex items-center justify-center">
                 <canvas ref={canvasRef} className="block" />
-                {phase === "playing" && (
-                    <div className="lg:hidden absolute bottom-3 left-0 right-0 flex items-end justify-between px-3 pointer-events-none">
+                {phase === "playing" && isTouchDevice() && (
+                    <div className="absolute bottom-3 left-0 right-0 flex items-end justify-between px-3 pointer-events-none">
                         <div className="pointer-events-auto">
                             <DPad
                                 onDir={(dir) => room.send("bomberman:move", { dir })}

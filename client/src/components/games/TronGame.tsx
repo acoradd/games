@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, TronGameState, ChatMsg } from "../../models/Lobby";
 import GameShell from "./GameShell";
-import DPad from "./DPad";
+import DPad, { isTouchDevice } from "./DPad";
 
 interface Props {
     room: Room<LobbyState>;
@@ -256,8 +256,8 @@ export default function TronGame({ room, sessionId, gameState, players, chatMess
         >
             <div className="relative w-full h-full flex items-center justify-center">
                 <canvas ref={canvasRef} className="block" style={{ imageRendering: "pixelated" }} />
-                {phase === "playing" && (
-                    <div className="lg:hidden absolute bottom-3 left-3">
+                {phase === "playing" && isTouchDevice() && (
+                    <div className="absolute bottom-3 left-3">
                         <DPad onDir={(dir) => room.send("tron:input", { dir })} />
                     </div>
                 )}
