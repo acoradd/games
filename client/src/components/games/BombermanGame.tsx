@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, BombermanGameState, ChatMsg } from "../../models/Lobby";
 import GameShell from "./GameShell";
+import DPad from "./DPad";
 
 interface Props {
     room: Room<LobbyState>;
@@ -304,7 +305,25 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                 </>
             }
         >
-            <canvas ref={canvasRef} className="block" />
+            <div className="relative w-full h-full flex items-center justify-center">
+                <canvas ref={canvasRef} className="block" />
+                {phase === "playing" && (
+                    <div className="lg:hidden absolute bottom-3 left-0 right-0 flex items-end justify-between px-3 pointer-events-none">
+                        <div className="pointer-events-auto">
+                            <DPad
+                                onDir={(dir) => room.send("bomberman:move", { dir })}
+                                repeatMs={80}
+                            />
+                        </div>
+                        <button
+                            onPointerDown={(e) => { e.preventDefault(); room.send("bomberman:bomb"); }}
+                            className="pointer-events-auto w-16 h-16 rounded-full bg-red-800/70 border-2 border-red-500/50 text-3xl flex items-center justify-center active:bg-red-600/70 touch-none select-none mb-1"
+                        >
+                            💣
+                        </button>
+                    </div>
+                )}
+            </div>
         </GameShell>
     );
 }
