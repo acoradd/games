@@ -41,6 +41,36 @@ export default function GameShell({
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
 
+    // Keep the screen awake while in the game (like a video player)
+    useEffect(() => {
+        if (!("wakeLock" in navigator)) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let sentinel: any = null;
+
+        async function request() {
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                sentinel = await (navigator as any).wakeLock.request("screen");
+            } catch {
+                // Low battery, tab not focused, or API blocked — not critical
+            }
+        }
+
+        // The wake lock is released automatically when the tab is hidden;
+        // re-request it when the user comes back.
+        const onVisibility = () => {
+            if (document.visibilityState === "visible") void request();
+        };
+
+        void request();
+        document.addEventListener("visibilitychange", onVisibility);
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibility);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+            void sentinel?.release();
+        };
+    }, []);
+
     function changeTab(tab: "jeu" | "scores" | "chat") {
         setMobileTab(tab);
         onTabChange?.(tab);
