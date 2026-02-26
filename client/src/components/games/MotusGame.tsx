@@ -469,7 +469,12 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
 
     const endContent = (
         <div className="text-center">
-            <p className="text-gray-400 mb-4">Partie terminée !</p>
+            <p className="text-gray-400 mb-2">Partie terminée !</p>
+            {secretWord && (
+                <p className="text-2xl font-bold tracking-widest text-white mb-4">
+                    {secretWord.toUpperCase()}
+                </p>
+            )}
             <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-2">Classement final</p>
             <ul className="flex flex-col gap-1 mb-4 text-left">
                 {rankedByPoints.map((id, rank) => {
