@@ -61,7 +61,7 @@ function LetterCell({
     return (
         <div
             className={`flex-1 aspect-square flex items-center justify-center rounded-md font-bold uppercase border-2 select-none transition-colors duration-100 ${bg} ${cursor ? "animate-pulse" : ""}`}
-            style={{ fontSize: "clamp(0.6rem, 3.5vw, 1.4rem)" }}
+            style={{ fontSize: "clamp(0.9rem, 4vw, 1.8rem)" }}
         >
             {letter}
         </div>
@@ -141,7 +141,7 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
     }
 
     // Font scales with the key width (which scales with viewport)
-    const keyFont: React.CSSProperties = { fontSize: "clamp(0.55rem, 2.2vw, 0.9rem)" };
+    const keyFont: React.CSSProperties = { fontSize: "clamp(0.8rem, 2.8vw, 1.1rem)" };
 
     return (
         <div
@@ -156,7 +156,7 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={onEnter}
                             style={{ flex: "1.6", ...keyFont }}
-                            className="h-10 rounded font-bold bg-indigo-700 border border-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-500 transition-colors"
+                            className="h-14 rounded font-bold bg-indigo-700 border border-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-500 transition-colors"
                         >
                             ↵
                         </button>
@@ -168,7 +168,7 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => onKey(letter)}
                             style={{ flex: "1", ...keyFont }}
-                            className={`min-w-0 h-10 rounded font-bold uppercase border transition-colors ${keyStyle(letter)}`}
+                            className={`min-w-0 h-14 rounded font-bold uppercase border transition-colors ${keyStyle(letter)}`}
                         >
                             {letter.toUpperCase()}
                         </button>
@@ -179,7 +179,7 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={onBackspace}
                             style={{ flex: "1.6", ...keyFont }}
-                            className="h-10 rounded font-bold bg-gray-700 border border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500 transition-colors"
+                            className="h-14 rounded font-bold bg-gray-700 border border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500 transition-colors"
                         >
                             ←
                         </button>
