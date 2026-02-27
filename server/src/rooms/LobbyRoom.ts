@@ -270,6 +270,22 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         if (this.state.isStarted && !leaving.isSpectator && code !== CloseCode.CONSENTED) {
             leaving.isConnected = false;
+
+            // Si plus aucun joueur actif connecté → terminer la partie immédiatement
+            let hasConnectedActive = false;
+            this.state.players.forEach((p) => {
+                if (!p.isSpectator && !p.isEliminated && p.isConnected) hasConnectedActive = true;
+            });
+            if (!hasConnectedActive) {
+                console.log(`[LobbyRoom ${this.roomId}] no connected active players left, ending game`);
+                const toEliminate: string[] = [];
+                this.state.players.forEach((p) => {
+                    if (!p.isSpectator && !p.isEliminated) toEliminate.push(p.id);
+                });
+                for (const sid of toEliminate) this.eliminatePlayer(sid);
+                return;
+            }
+
             try {
                 await this.allowReconnection(client, 30);
                 leaving.isConnected = true;

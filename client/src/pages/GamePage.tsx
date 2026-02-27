@@ -127,12 +127,44 @@ export default function GamePage() {
         setChatMessages(chat);
     }, []);
 
-    const bindRoomHandlers = useCallback((room: Room<LobbyState>) => {
+    const bindRoomHandlers = useCallback((room: Room<LobbyState>, fromCurrentRoom = false) => {
+        // Helper: redirect to lobby when the room was reset (e.g. host returned while we were away)
+        function redirectToLobby() {
+            clearToken(roomId);
+            returningToLobbyRef.current = true;
+            navigate(`/lobby/${roomId}`, { state: { fromReturnToLobby: true } });
+        }
+
         if (room.state) {
+            const s = room.state as unknown as Record<string, unknown>;
+            // Skip redirect on the initial call when navigating directly from the lobby:
+            // the Colyseus state patch (status="game") hasn't arrived yet at this point,
+            // so room.state.status may still read "lobby" (stale). onStateChange will handle it.
+            if ((s["status"] as string) === "lobby" && !fromCurrentRoom && !cancelledRef.current) {
+                // We reconnected but the lobby was already reset and our entry was removed from
+                // state.players (returnToLobby purges disconnected players). A plain Colyseus
+                // reconnect doesn't call onJoin, so we would never be re-added.
+                //
+                // Fix: explicitly leave + clear the room NOW (synchronously, before navigate),
+                // so that LobbyPage's connect() finds no current room and calls joinLobby()
+                // fresh — triggering onJoin which re-adds us to state.players.
+                // Set returningToLobbyRef so the useEffect cleanup doesn't double-leave.
+                returningToLobbyRef.current = true;
+                clearToken(roomId);
+                clearCurrentRoom();
+                room.leave();
+                navigate(`/lobby/${roomId}`, { state: { fromReturnToLobby: true } });
+                return;
+            }
             syncState(room.state as unknown as LobbyState);
         }
 
         room.onStateChange((state) => {
+            const s = state as unknown as Record<string, unknown>;
+            if ((s["status"] as string) === "lobby" && !cancelledRef.current) {
+                redirectToLobby();
+                return;
+            }
             syncState(state as unknown as LobbyState);
         });
 
@@ -145,9 +177,7 @@ export default function GamePage() {
 
         room.onMessage("lobby:return", () => {
             if (cancelledRef.current) return;
-            clearToken(roomId);
-            returningToLobbyRef.current = true;
-            navigate(`/lobby/${roomId}`, { state: { fromReturnToLobby: true } });
+            redirectToLobby();
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncState]);
@@ -198,6 +228,9 @@ export default function GamePage() {
         async function connect() {
             try {
                 let room = getCurrentRoom(roomId);
+                // fromCurrentRoom=true means the room object was handed off from LobbyPage;
+                // the initial room.state may still read status="lobby" (stale, pre-patch).
+                const fromCurrentRoom = !!room;
 
                 if (!room) {
                     const storedToken = loadToken(roomId);
@@ -226,7 +259,7 @@ export default function GamePage() {
                 roomRef.current = room;
                 setCurrentRoom(room);
                 setSessionId(room.sessionId);
-                bindRoomHandlers(room);
+                bindRoomHandlers(room, fromCurrentRoom);
                 openBroadcastChannel(roomId);
                 setLoading(false);
             } catch (err: unknown) {

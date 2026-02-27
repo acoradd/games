@@ -520,6 +520,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             myUsername={playerNames[sessionId] ?? ""}
             phase={phase}
             isHost={isHost}
+            spectatorCount={players.filter((p) => p.isSpectator).length}
             gameScrollable
             header={header}
             scoreboard={scoreboard}

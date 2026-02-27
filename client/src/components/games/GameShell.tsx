@@ -21,6 +21,8 @@ interface Props {
     onTabChange?: (tab: "jeu" | "scores" | "chat") => void;
     /** Contenu du panneau latéral */
     scoreboard: React.ReactNode;
+    /** Nombre de spectateurs connectés */
+    spectatorCount?: number;
     /** Contenu de la modale de fin de manche (affiché quand phase === "roundEnd") — le bouton "Manche suivante" est ajouté par GameShell */
     roundEndContent?: React.ReactNode;
     /** Contenu de la modale de fin de partie (affiché quand phase === "ended") — le bouton "Retour" est ajouté par GameShell */
@@ -31,7 +33,7 @@ export default function GameShell({
     room, chatMessages, myUsername, phase, isHost,
     header, children, gameScrollable = false,
     containerRef, onTabChange,
-    scoreboard, roundEndContent, endContent,
+    scoreboard, roundEndContent, endContent, spectatorCount = 0,
 }: Props) {
     const [mobileTab, setMobileTab] = useState<"jeu" | "scores" | "chat">("jeu");
     const [chatInput, setChatInput] = useState("");
@@ -126,6 +128,12 @@ export default function GameShell({
 
                     <div className={`${mobileTab === "chat" ? "hidden lg:block" : ""} p-4 border-b border-gray-800 shrink-0`}>
                         {scoreboard}
+                        {spectatorCount > 0 && (
+                            <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
+                                <span>👁</span>
+                                <span>{spectatorCount} spectateur{spectatorCount > 1 ? "s" : ""}</span>
+                            </p>
+                        )}
                     </div>
 
                     <div className={`${mobileTab === "scores" ? "hidden lg:flex" : "flex"} flex-col flex-1 min-h-0`}>

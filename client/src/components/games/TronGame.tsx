@@ -150,6 +150,7 @@ export default function TronGame({ room, sessionId, gameState, players, chatMess
             myUsername={playerNames[sessionId] ?? ""}
             phase={phase}
             isHost={isHost}
+            spectatorCount={players.filter((p) => p.isSpectator).length}
             containerRef={containerRef}
             onTabChange={(tab) => { if (tab === "jeu") requestAnimationFrame(() => drawCanvas()); }}
             header={
@@ -181,6 +182,7 @@ export default function TronGame({ room, sessionId, gameState, players, chatMess
                             const lp = playerById.get(id);
                             const isEliminated = gp?.eliminated ?? lp?.isEliminated ?? false;
                             const isAlive = gp?.alive ?? false;
+                            const isConnected = lp?.isConnected ?? true;
                             const pts = gameState.roundPoints[id] ?? 0;
                             return (
                                 <li key={id} className={`flex items-center justify-between gap-2 text-sm ${
@@ -188,10 +190,12 @@ export default function TronGame({ room, sessionId, gameState, players, chatMess
                                 }`}>
                                     <span className={`truncate flex items-center gap-1.5 ${isEliminated ? "line-through" : ""}`}>
                                         {gp && <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: gp.color }} />}
+                                        {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
                                         {playerNames[id] ?? id}
                                         {id === sessionId && <span className="text-gray-600 text-xs">(vous)</span>}
                                         {isEliminated && <span className="text-gray-600 text-xs ml-1">✕</span>}
-                                        {!isAlive && !isEliminated && <span className="text-gray-600 text-xs ml-1">mort</span>}
+                                        {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
+                                        {!isAlive && !isEliminated && isConnected && <span className="text-gray-600 text-xs ml-1">mort</span>}
                                     </span>
                                     {gameState.maxRounds > 1 ? (
                                         <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>

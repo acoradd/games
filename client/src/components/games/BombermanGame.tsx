@@ -174,6 +174,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             myUsername={playerNames[sessionId] ?? ""}
             phase={phase}
             isHost={isHost}
+            spectatorCount={players.filter((p) => p.isSpectator).length}
             containerRef={containerRef}
             onTabChange={(tab) => { if (tab === "jeu") requestAnimationFrame(() => drawCanvas()); }}
             header={
@@ -208,6 +209,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                             const gp = gsPlayers[id];
                             const lp = playerById.get(id);
                             const isEliminated = gp?.eliminated ?? lp?.isEliminated ?? false;
+                            const isConnected = lp?.isConnected ?? true;
                             const isMe = id === sessionId;
                             const pts = gameState.roundPoints[id] ?? 0;
                             return (
@@ -220,8 +222,10 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                                                     style={{ backgroundColor: gp.color }}
                                                 />
                                             )}
+                                            {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
                                             {name}
                                             {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
+                                            {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
                                         </span>
                                         {gameState.maxRounds > 1 ? (
                                             <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>

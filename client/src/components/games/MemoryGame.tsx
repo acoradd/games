@@ -124,6 +124,7 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
             myUsername={playerNames[sessionId] ?? ""}
             phase={phase}
             isHost={isHost}
+            spectatorCount={players.filter((p) => p.isSpectator).length}
             gameScrollable
             header={
                 <>
