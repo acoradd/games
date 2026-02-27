@@ -19,7 +19,9 @@
       "Bash(cd C:/Programmation/aco/accoradd-games/server && ./node_modules/.bin/tsc --noEmit 2>&1)",
       "Bash(cd C:/Programmation/aco/accoradd-games/client && ./node_modules/.bin/tsc --noEmit 2>&1)",
       "Bash(cd /c/Programmation/aco/accoradd-games/server && npm uninstall bcryptjs accoradd-games && npm uninstall --save-dev @types/bcryptjs dotenv 2>&1)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc:*)"
     ]
   }
 }

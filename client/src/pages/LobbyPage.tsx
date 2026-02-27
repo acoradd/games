@@ -127,7 +127,8 @@ export default function LobbyPage() {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
                     list.push({
                         id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
-                        isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false
+                        isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
+                        isSpectator: p.isSpectator ?? false
                     })
                 );
             } else {
@@ -135,7 +136,8 @@ export default function LobbyPage() {
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
                     list.push({
                         id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
-                        isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false
+                        isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
+                        isSpectator: p.isSpectator ?? false
                     })
                 );
             }
@@ -180,6 +182,14 @@ export default function LobbyPage() {
         }
 
         async function connect() {
+            // Si on a un token de reconnexion + un slug stocké → on était dans la partie, retourner dans GamePage
+            const storedToken = localStorage.getItem(`reconnect_${roomId}`);
+            const storedSlug = localStorage.getItem(`game_slug_${roomId}`);
+            if (storedToken && storedSlug) {
+                navigate(`/game/${storedSlug}/play/${roomId}`);
+                return;
+            }
+
             try {
                 let room = getCurrentRoom(roomId);
                 if (!room) {
@@ -197,6 +207,21 @@ export default function LobbyPage() {
                 // Sync initial state immediately (room from store already has state)
                 if (room.state) {
                     syncState(room.state as unknown as LobbyState);
+                    // Si la partie est déjà en cours ET qu'on n'arrive pas d'un "retour au lobby",
+                    // rejoindre en tant que spectateur.
+                    // NB : si on vient d'un lobby:return, le patch serveur (status="lobby") peut ne pas
+                    // encore être arrivé → on ne redirige pas pour éviter une boucle.
+                    const fromReturnToLobby = (location.state as Record<string, unknown> | null)?.fromReturnToLobby === true;
+                    if (!fromReturnToLobby) {
+                        const s = room.state as unknown as Record<string, unknown>;
+                        const status = (s['status'] as string) ?? 'lobby';
+                        const slug = (s['selectedGameSlug'] as string) ?? '';
+                        if (status === 'game' && slug) {
+                            startingGameRef.current = true;
+                            navigate(`/game/${slug}/play/${roomId}`);
+                            return;
+                        }
+                    }
                 }
 
                 room.onStateChange((state) => {
@@ -308,9 +333,10 @@ export default function LobbyPage() {
 
             {/* ── Header ── */}
             <header className="border-b border-gray-800 px-6 py-3 flex items-center gap-4 flex-wrap">
-                <button onClick={() => navigate('/')}
-                        className="text-gray-500 hover:text-gray-300 text-sm transition-colors">
-                    ← Accueil
+                <button onClick={() => navigate('/')}>
+                    <img src="/favicon.png"
+                         alt="home"
+                         className="object-cover h-8 hover:scale-125 transition-all brightness-150 hover:brightness-200"/>
                 </button>
                 <span className="text-gray-700">|</span>
                 <span className="font-bold text-white">Lobby</span>

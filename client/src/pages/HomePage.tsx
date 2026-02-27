@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import type { GameMode } from "../models/GameMode";
-import { getGameModes } from "../services/gameModeService";
-import { createAnonymousPlayer, getStoredPlayer } from "../services/playerService";
-import GameCard from "../components/GameCard";
-import JoinRoomForm from "../components/JoinRoomForm";
-import UsernameModal from "../components/UsernameModal";
+import {useEffect, useState} from 'react';
+import {useLocation, useNavigate} from 'react-router-dom';
+import GameCard from '../components/GameCard';
+import JoinRoomForm from '../components/JoinRoomForm';
+import UsernameModal from '../components/UsernameModal';
+import type {GameMode} from '../models/GameMode';
+import {getGameModes} from '../services/gameModeService';
+import {createAnonymousPlayer, getStoredPlayer} from '../services/playerService';
 
 export default function HomePage() {
     const [gameModes, setGameModes] = useState<GameMode[]>([]);
@@ -22,7 +22,7 @@ export default function HomePage() {
 
         getGameModes()
             .then(setGameModes)
-            .catch(() => setError("Impossible de charger les jeux. Le serveur est-il démarré ?"))
+            .catch(() => setError('Impossible de charger les jeux. Le serveur est-il démarré ?'))
             .finally(() => setLoadingGames(false));
     }, []);
 
@@ -43,17 +43,22 @@ export default function HomePage() {
     }
 
     function handleCreateLobby() {
-        navigate("/lobby/new");
+        navigate('/lobby/new');
     }
 
     return (
         <div className="h-dvh bg-gray-950 text-white flex flex-col">
             {showModal && (
-                <UsernameModal onConfirm={handleUsernameConfirm} loading={creatingPlayer} />
+                <UsernameModal onConfirm={handleUsernameConfirm} loading={creatingPlayer}/>
             )}
 
             <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">AccoGames</h1>
+                <h1 className="text-xl font-bold tracking-tight flex gap-2 items-center">
+                    <img src="/favicon.png"
+                         alt="home"
+                         className="object-cover h-8 hover:scale-125 transition-all brightness-150 hover:brightness-200"/>
+                    Games
+                </h1>
                 <div className="flex items-center gap-4">
                     {getStoredPlayer() && (
                         <span className="text-gray-400 text-sm">{getStoredPlayer()?.player.username}</span>
@@ -71,12 +76,13 @@ export default function HomePage() {
                 <section className="max-w-5xl mx-auto px-6 py-10 ">
                     <section className="mb-8">
                         <h2 className="text-lg font-semibold text-gray-300 mb-3">Rejoindre une partie</h2>
-                        <JoinRoomForm />
+                        <JoinRoomForm/>
                     </section>
 
                     <section>
                         <h2 className="text-lg font-semibold text-gray-300 mb-1">Les jeux</h2>
-                        <p className="text-gray-600 text-sm mb-4">Créez un lobby et choisissez le jeu une fois à l'intérieur.</p>
+                        <p className="text-gray-600 text-sm mb-4">Créez un lobby et choisissez le jeu une fois à
+                            l'intérieur.</p>
 
                         {loadingGames && <p className="text-gray-500 text-sm">Chargement…</p>}
 

@@ -250,11 +250,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.state.hostId = client.sessionId;
         }
 
+        if (this.state.status === "game") {
+            player.isSpectator = true;
+            player.isReady = true;
+        }
+
         this.playerIdMap.set(auth.playerId, client.sessionId);
         this.sessionToPlayerId.set(client.sessionId, auth.playerId);
 
         this.state.players.set(client.sessionId, player);
-        console.log(`[LobbyRoom ${this.roomId}] ${player.username} joined (host: ${player.isHost})`);
+        console.log(`[LobbyRoom ${this.roomId}] ${player.username} joined (host: ${player.isHost}, spectator: ${player.isSpectator})`);
     }
 
     async onLeave(client: Client, code: CloseCode) {
@@ -263,7 +268,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} left (code: ${code})`);
 
-        if (this.state.isStarted && code !== CloseCode.CONSENTED) {
+        if (this.state.isStarted && !leaving.isSpectator && code !== CloseCode.CONSENTED) {
             leaving.isConnected = false;
             try {
                 await this.allowReconnection(client, 30);
@@ -278,7 +283,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} reconnection timed out, eliminating`);
                 this.eliminatePlayer(client.sessionId);
             }
-        } else if (this.state.isStarted && code === CloseCode.CONSENTED) {
+        } else if (this.state.isStarted && !leaving.isSpectator && code === CloseCode.CONSENTED) {
             this.eliminatePlayer(client.sessionId);
         } else {
             this.removePlayer(client.sessionId, leaving);
@@ -1078,7 +1083,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
     private initBomberman() {
         const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
-        const lives      = Math.min(5, Math.max(1, parseInt(String(options["lives"]      ?? "3"), 10)));
+        const lives      = Math.min(5, Math.max(1, parseInt(String(options["lives"]      ?? "1"), 10)));
         const bombCount  = Math.min(3, Math.max(1, parseInt(String(options["bombCount"]  ?? "1"), 10)));
         const bombRange  = Math.min(4, Math.max(1, parseInt(String(options["bombRange"]  ?? "2"), 10)));
         const bombSpeedIndex = Math.min(4, Math.max(0, parseInt(String(options["bombSpeed"] ?? "3"), 10) - 1));
@@ -1094,11 +1099,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const existingPlayerNames: Record<string, string> = roundCarryOver?.playerNames ?? {};
 
         const MAP_SIZES: Record<string, [number, number]> = {
-            Petite:  [11, 9],
-            Normale: [13, 11],
-            Grande:  [17, 13],
+            Petite:  [13, 11],
+            Normale: [17, 13],
+            Grande:  [21, 15],
         };
-        const [cols, rows] = MAP_SIZES[mapSizeKey] ?? [13, 11];
+        const [cols, rows] = MAP_SIZES[mapSizeKey] ?? [17, 13];
 
         const spawnCorners = [[0, 0], [cols - 1, 0], [0, rows - 1], [cols - 1, rows - 1]];
 
@@ -1392,10 +1397,20 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             player.isReady = !player.isReady;
         },
 
-        selectGame: (client: Client, data: { slug: string }) => {
+        selectGame: async (client: Client, data: { slug: string }) => {
             if (client.sessionId !== this.state.hostId) return;
             this.state.selectedGameSlug = data.slug ?? "";
-            this.state.gameOptionsJson = "{}";
+            const gm = await prisma.gameMode.findUnique({ where: { slug: data.slug } });
+            if (gm?.options && typeof gm.options === "object") {
+                const opts = gm.options as Record<string, { default: unknown }>;
+                const defaults: Record<string, unknown> = {};
+                for (const [key, def] of Object.entries(opts)) {
+                    defaults[key] = def.default;
+                }
+                this.state.gameOptionsJson = JSON.stringify(defaults);
+            } else {
+                this.state.gameOptionsJson = "{}";
+            }
         },
 
         setOptions: (client: Client, data: { options: Record<string, unknown> }) => {
@@ -1430,6 +1445,34 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.stopGameLoop();
             this.prevRound = null;
             this.staleSessionByPlayerId.clear();
+
+            // Supprimer les joueurs non connectés (éliminés, déconnectés, spectateurs)
+            // — leur WebSocket est fermée, ils ne peuvent pas rejoindre le lobby
+            const toRemove: string[] = [];
+            this.state.players.forEach((p) => {
+                if (p.isEliminated || !p.isConnected || p.isSpectator) {
+                    toRemove.push(p.id); // p.id === sessionId (défini dans onJoin)
+                }
+            });
+            for (const sid of toRemove) {
+                const playerId = this.sessionToPlayerId.get(sid);
+                if (playerId) {
+                    this.playerIdMap.delete(playerId);
+                    this.sessionToPlayerId.delete(sid);
+                }
+                this.state.players.delete(sid);
+            }
+
+            // Réassigner l'hôte si l'ancien a été supprimé
+            if (this.state.players.size > 0 && !this.state.players.has(this.state.hostId)) {
+                const nextEntry = this.state.players.entries().next().value as [string, LobbyPlayer] | undefined;
+                if (nextEntry) {
+                    const [nextId, nextPlayer] = nextEntry;
+                    nextPlayer.isHost = true;
+                    this.state.hostId = nextId;
+                }
+            }
+
             this.state.isStarted = false;
             this.state.status = "lobby";
             this.state.gameStateJson = "{}";
@@ -1439,7 +1482,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 p.isConnected = true;
             });
             this.broadcast("lobby:return", { roomId: this.roomId });
-            console.log(`[LobbyRoom ${this.roomId}] host returned everyone to lobby`);
+            console.log(`[LobbyRoom ${this.roomId}] host returned everyone to lobby (removed ${toRemove.length} ghost players)`);
         },
 
         nextRound: async (client: Client) => {

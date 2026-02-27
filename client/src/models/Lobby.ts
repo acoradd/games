@@ -5,6 +5,7 @@ export interface LobbyPlayer {
     isReady: boolean;
     isConnected: boolean;
     isEliminated: boolean;
+    isSpectator: boolean;
 }
 
 export interface ChatMsg {

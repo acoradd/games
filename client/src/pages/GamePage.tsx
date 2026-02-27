@@ -13,9 +13,10 @@ import MotusGame from "../components/games/MotusGame";
 
 // ── Reconnection token persistence ─────────────────────────────────────────
 function tokenKey(roomId: string) { return `reconnect_${roomId}`; }
+function slugKey(roomId: string) { return `game_slug_${roomId}`; }
 function loadToken(roomId: string) { return localStorage.getItem(tokenKey(roomId)) ?? ""; }
 function saveToken(roomId: string, token: string) { localStorage.setItem(tokenKey(roomId), token); }
-function clearToken(roomId: string) { localStorage.removeItem(tokenKey(roomId)); }
+function clearToken(roomId: string) { localStorage.removeItem(tokenKey(roomId)); localStorage.removeItem(slugKey(roomId)); }
 
 // ── Cross-tab detection via BroadcastChannel ────────────────────────────────
 function checkOtherTabActive(roomId: string): Promise<boolean> {
@@ -85,12 +86,14 @@ export default function GamePage() {
             if (typeof (playersRaw as Map<string, unknown>).forEach === "function") {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
                     list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
-                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
+                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
+                                isSpectator: p.isSpectator ?? false })
                 );
             } else {
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
                     list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
-                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false })
+                                isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
+                                isSpectator: p.isSpectator ?? false })
                 );
             }
         }
@@ -144,7 +147,7 @@ export default function GamePage() {
             if (cancelledRef.current) return;
             clearToken(roomId);
             returningToLobbyRef.current = true;
-            navigate(`/lobby/${roomId}`);
+            navigate(`/lobby/${roomId}`, { state: { fromReturnToLobby: true } });
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncState]);
@@ -219,6 +222,7 @@ export default function GamePage() {
 
                 reconnectionTokenRef.current = room.reconnectionToken;
                 saveToken(roomId, room.reconnectionToken);
+                localStorage.setItem(slugKey(roomId), slug);
                 roomRef.current = room;
                 setCurrentRoom(room);
                 setSessionId(room.sessionId);
@@ -274,6 +278,8 @@ export default function GamePage() {
         );
     }
 
+    const isSpectator = players.find((p) => p.id === sessionId)?.isSpectator ?? false;
+
     return (
         <>
             {reconnecting && (
@@ -282,6 +288,11 @@ export default function GamePage() {
                         <p className="text-white font-semibold mb-1">Reconnexion…</p>
                         <p className="text-gray-400 text-sm">Tentative de reconnexion au serveur</p>
                     </div>
+                </div>
+            )}
+            {isSpectator && (
+                <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 bg-gray-800/90 border border-gray-600 text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm pointer-events-none">
+                    👁 Spectateur
                 </div>
             )}
 

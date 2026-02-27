@@ -2,8 +2,8 @@
 
 A self-hosted multiplayer mini-games portal. Create private rooms, invite friends, and play together in real time.
 
-[![CI](https://github.com/accoradd/accoradd-games/actions/workflows/ci.yml/badge.svg)](https://github.com/accoradd/accoradd-games/actions/workflows/ci.yml)
-[![Docker](https://github.com/accoradd/accoradd-games/actions/workflows/docker.yml/badge.svg)](https://github.com/accoradd/accoradd-games/actions/workflows/docker.yml)
+[![CI](https://github.com/acoradd/games/actions/workflows/ci.yml/badge.svg)](https://github.com/acoradd/games/actions/workflows/ci.yml)
+[![Docker](https://github.com/acoradd/games/actions/workflows/docker.yml/badge.svg)](https://github.com/acoradd/games/actions/workflows/docker.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
