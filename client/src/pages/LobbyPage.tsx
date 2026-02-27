@@ -1,5 +1,6 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
 import type {ChatMsg, LobbyPlayer, LobbyState} from '../models/Lobby';
@@ -306,17 +307,29 @@ export default function LobbyPage() {
                 <span className="text-gray-700">|</span>
                 <span className="font-bold text-white">Lobby</span>
                 <div className="ml-auto flex items-center gap-3 flex-wrap">
-                    {/* Code */}
-                    <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
-                        <span className="text-gray-500 text-xs">Code</span>
-                        <span className="font-mono font-bold text-white tracking-widest text-sm">{roomId}</span>
-                        <button
-                            onClick={() => handleCopy('code')}
-                            className="text-gray-400 hover:text-white text-xs transition-colors"
-                            title="Copier le code"
-                        >
-                            {copied === 'code' ? '✓' : '📋'}
-                        </button>
+                    {/* Code + QR code au survol */}
+                    <div className="relative group">
+                        <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5 cursor-default">
+                            <span className="text-gray-500 text-xs">Code</span>
+                            <span className="font-mono font-bold text-white tracking-widest text-sm">{roomId}</span>
+                            <button
+                                onClick={() => handleCopy('code')}
+                                className="text-gray-400 hover:text-white text-xs transition-colors"
+                                title="Copier le code"
+                            >
+                                {copied === 'code' ? '✓' : '📋'}
+                            </button>
+                        </div>
+                        {/* QR code popup */}
+                        <div className="absolute right-0 top-full mt-2 z-50 hidden group-hover:flex flex-col items-center gap-2 bg-gray-950 border border-gray-800 rounded-xl p-3 shadow-2xl">
+                            <QRCodeSVG
+                                value={`${window.location.origin}/lobby/${roomId}`}
+                                size={160}
+                                bgColor="#030712"
+                                fgColor="#ffffff"
+                            />
+                            <span className="text-gray-500 text-xs font-mono">{roomId}</span>
+                        </div>
                     </div>
                     {/* Lien */}
                     <button

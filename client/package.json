@@ -29,6 +29,7 @@
     "dependencies": {
         "@colyseus/sdk": "^0.17.34",
         "axios": "^1.13.5",
+        "qrcode.react": "^4.2.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-router-dom": "^7.13.0"
