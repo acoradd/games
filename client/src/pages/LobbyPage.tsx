@@ -106,6 +106,9 @@ export default function LobbyPage() {
     const [chatInput, setChatInput] = useState('');
     const [copied, setCopied] = useState<'code' | 'link' | null>(null);
     const [mobileTab, setMobileTab] = useState<'jeu' | 'joueurs' | 'chat'>('jeu');
+    const [unreadChat, setUnreadChat] = useState(0);
+    const mobileTabRef = useRef(mobileTab);
+    useEffect(() => { mobileTabRef.current = mobileTab; }, [mobileTab]);
 
     const isHost = sessionId !== '' && sessionId === hostId;
     const selectedGame = gameModes.find((g) => g.slug === selectedSlug) ?? null;
@@ -158,7 +161,12 @@ export default function LobbyPage() {
                 chat.push({username: m.username, text: m.text, ts: m.timestamp});
             }
         }
-        setChatMessages(chat);
+        setChatMessages((prev) => {
+            if (chat.length > prev.length && mobileTabRef.current !== 'chat') {
+                setUnreadChat((n) => n + (chat.length - prev.length));
+            }
+            return chat;
+        });
     }, []);
 
     // ── Connexion à la room ─────────────────────────────────────────────────
@@ -346,14 +354,22 @@ export default function LobbyPage() {
                 {(['jeu', 'joueurs', 'chat'] as const).map((tab) => (
                     <button
                         key={tab}
-                        onClick={() => setMobileTab(tab)}
-                        className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                        onClick={() => {
+                            setMobileTab(tab);
+                            if (tab === 'chat') setUnreadChat(0);
+                        }}
+                        className={`relative flex-1 py-2.5 text-sm font-semibold transition-colors ${
                             mobileTab === tab
                                 ? 'border-b-2 border-indigo-500 text-white'
                                 : 'text-gray-500 hover:text-gray-300'
                         }`}
                     >
                         {tab === 'joueurs' ? `Joueurs (${players.length})` : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        {tab === 'chat' && unreadChat > 0 && (
+                            <span className="absolute top-1.5 right-[calc(50%-22px)] min-w-[18px] h-[18px] bg-indigo-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                                {unreadChat > 99 ? '99+' : unreadChat}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
