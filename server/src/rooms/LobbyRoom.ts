@@ -19,6 +19,7 @@ interface RoundCarryOver {
     maxRounds: number;
     roundPoints: Record<string, number>;
     playerNames: Record<string, string>;
+    playerOrder?: string[];
 }
 
 // ── Memory game types (server-only) ────────────────────────────────────────
@@ -745,6 +746,28 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             players[id] = { guesses: [], solved: false, solvedAt: 0, eliminated: false };
         });
 
+        // Build player order: shuffle on round 1 (coop), rotate on subsequent rounds (coop)
+        let playerOrder: string[];
+        if (mode === "coop") {
+            const prevOrder = roundCarryOver?.playerOrder;
+            if (prevOrder && prevOrder.length > 0) {
+                // Rotate left: [A,B,C,D] → [B,C,D,A]
+                const active = prevOrder.filter((id) => playerIds.includes(id));
+                playerOrder = [...active.slice(1), active[0]!];
+                // Append any new players not in prev order
+                playerIds.filter((id) => !active.includes(id)).forEach((id) => playerOrder.push(id));
+            } else {
+                // First round: shuffle randomly
+                playerOrder = [...playerIds];
+                for (let i = playerOrder.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [playerOrder[i], playerOrder[j]] = [playerOrder[j]!, playerOrder[i]!];
+                }
+            }
+        } else {
+            playerOrder = playerIds;
+        }
+
         const now = Date.now();
         const gs: MotusGameState = {
             phase: "playing",
@@ -755,9 +778,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             maxAttempts,
             roundDeadline: timeLimit > 0 ? now + timeLimit * 1000 : 0,
             players,
-            playerOrder: playerIds,
+            playerOrder,
             sharedGuesses: [],
-            currentTurnId: playerIds[0] ?? "",
+            currentTurnId: playerOrder[0] ?? "",
             playerNames,
             currentRound,
             maxRounds,
@@ -1517,6 +1540,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 maxRounds: gs.maxRounds ?? 1,
                 roundPoints: gs.roundPoints ?? {},
                 playerNames: gs.playerNames ?? {},
+                playerOrder: (gs as MotusGameState).playerOrder,
             };
 
             this.stopGameLoop();
