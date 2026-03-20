@@ -28,6 +28,7 @@
     },
     "dependencies": {
         "@colyseus/sdk": "^0.17.34",
+        "accoradd-games": "file:..",
         "axios": "^1.13.5",
         "qrcode.react": "^4.2.0",
         "react": "^19.0.0",

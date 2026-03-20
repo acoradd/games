@@ -9,8 +9,8 @@ import {joinLobby} from '../services/lobbyService';
 import {getStoredPlayer} from '../services/playerService';
 import {clearCurrentRoom, getCurrentRoom, setCurrentRoom} from '../webservices/currentLobbyRoom';
 
-function getThumbnailUrl(slug: string) {
-    return `/assets/games/${slug}/thumbnail.png`;
+function getBigUrl(slug: string) {
+    return `/assets/games/${slug}/big.png`;
 }
 
 // ── Composant options ─────────────────────────────────────────────────────────
@@ -412,23 +412,23 @@ export default function LobbyPage() {
                             <h2 className="text-lg font-semibold text-gray-300 mb-4">
                                 {isHost ? 'Choisissez un jeu' : 'En attente du choix de l\'hôte…'}
                             </h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                                 {gameModes.map((gm) => {
                                     return (
                                         <button
                                             key={gm.slug}
                                             disabled={!isHost}
                                             onClick={() => handleSelectGame(gm.slug)}
-                                            className={`text-left rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition-colors disabled:cursor-default disabled:hover:border-gray-700 group`}
+                                            className={`text-left rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition-colors disabled:cursor-default disabled:hover:border-gray-700 group flex flex-col`}
                                         >
                                             <img
-                                                src={getThumbnailUrl(gm.slug)}
+                                                src={getBigUrl(gm.slug)}
                                                 alt={gm.name}
                                                 className="h-36 flex object-cover rounded-lg w-full"
                                             />
-                                            <div className="p-4 bg-gray-900">
+                                            <div className="p-4 bg-gray-900 flex-auto flex flex-col">
                                                 <p className="font-bold text-white">{gm.name}</p>
-                                                <p className="text-gray-400 text-xs mt-1 line-clamp-2">{gm.description}</p>
+                                                <p className="text-gray-400 text-xs mt-1 line-clamp-2 flex-auto">{gm.description}</p>
                                                 <p className="text-gray-600 text-xs mt-2">{gm.minPlayers}–{gm.maxPlayers} joueurs</p>
                                             </div>
                                         </button>
@@ -443,11 +443,11 @@ export default function LobbyPage() {
                                 <div>
                                     {/* Bannière du jeu */}
                                     <div
-                                        className={`rounded-xl h-40 mb-5 relative`}
-                                        style={{backgroundImage: getThumbnailUrl(selectedGame.slug)}}
+                                        className={`rounded-xl w-full aspect-[5/1] mb-5 relative`}
+                                        style={{backgroundImage: getBigUrl(selectedGame.slug)}}
                                     >
                                         <img
-                                            src={getThumbnailUrl(selectedGame.slug)}
+                                            src={getBigUrl(selectedGame.slug)}
                                             alt={selectedGame.name}
                                             className="rounded-xl h-full object-cover w-full absolute top-0 right-0 left-0"
                                         />

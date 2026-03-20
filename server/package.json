@@ -43,6 +43,7 @@
     "@colyseus/schema": "^4.0.0",
     "@colyseus/tools": "^0.17.0",
     "@prisma/client": "^5.22.0",
+    "accoradd-games": "file:..",
     "colyseus": "^0.17.6",
     "cors": "^2.8.6",
     "express": "^4.18.2",
