@@ -43,3 +43,10 @@ export function getStoredPlayer(): StoredPlayer | null {
 export function clearStoredPlayer(): void {
     localStorage.removeItem(STORAGE_KEY);
 }
+
+export function updateStoredPlayerGravatarUrl(gravatarUrl: string | null): void {
+    const stored = getStoredPlayer();
+    if (!stored) return;
+    stored.player.gravatarUrl = gravatarUrl;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+}

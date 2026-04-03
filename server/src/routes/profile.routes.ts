@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middleware/auth.middleware.js";
-import { getMe, updatePassword, getSessions } from "../controllers/profile.controller.js";
+import { getMe, updatePassword, putEmail, getSessions } from "../controllers/profile.controller.js";
 
 const router = Router();
 
@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.get("/me", getMe);
 router.put("/me/password", updatePassword);
+router.put("/me/email", putEmail);
 router.get("/me/sessions", getSessions);
 
 export default router;

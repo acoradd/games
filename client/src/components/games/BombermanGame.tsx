@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, BombermanGameState, ChatMsg } from "../../models/Lobby";
 import GameShell from "./GameShell";
+import Avatar from "../Avatar";
+import {X} from "lucide-react";
 import DPad, { isTouchDevice } from "./DPad";
 
 interface Props {
@@ -172,6 +174,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             room={room}
             chatMessages={chatMessages}
             myUsername={playerNames[sessionId] ?? ""}
+            playerAvatars={Object.fromEntries(players.map((p) => [p.username, p.gravatarUrl]))}
             phase={phase}
             isHost={isHost}
             spectatorCount={players.filter((p) => p.isSpectator).length}
@@ -215,17 +218,22 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                             return (
                                 <li key={id} className={`text-sm ${isEliminated ? "text-gray-600" : "text-gray-200"}`}>
                                     <div className={`flex items-center justify-between gap-1 ${isEliminated ? "line-through" : ""}`}>
-                                        <span className="flex items-center gap-1.5 truncate">
-                                            {gp && (
-                                                <span
-                                                    className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-                                                    style={{ backgroundColor: gp.color }}
-                                                />
+                                        <span className="flex items-center gap-2 truncate">
+                                            <div className="relative shrink-0">
+                                                <Avatar username={name} gravatarUrl={lp?.gravatarUrl || null} size="sm" />
+                                                {gp && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950" style={{ backgroundColor: gp.color }} />}
+                                            </div>
+                                            <span className="flex items-center gap-1 truncate">
+                                                {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
+                                                <span className="truncate">{name}</span>
+                                                {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
+                                                {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1 shrink-0">(reconnexion…)</span>}
+                                            </span>
+                                            {isHost && !isConnected && !isEliminated && (
+                                                <button onClick={() => room.send("kick", {sessionId: id})} title="Expulser" className="shrink-0 text-gray-600 hover:text-red-400 transition-colors">
+                                                    <X className="w-3 h-3" />
+                                                </button>
                                             )}
-                                            {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
-                                            {name}
-                                            {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
-                                            {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
                                         </span>
                                         {gameState.maxRounds > 1 ? (
                                             <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>

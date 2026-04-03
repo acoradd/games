@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyState, ChatMsg } from "../../models/Lobby";
+import Avatar from "../Avatar";
 
 interface Props {
     room: Room<LobbyState>;
     chatMessages: ChatMsg[];
     myUsername: string;
+    /** username → gravatarUrl (empty string = no gravatar) */
+    playerAvatars?: Record<string, string>;
     /** "roundEnd" triggers the between-rounds overlay; "ended" triggers the final overlay */
     phase: string;
     isHost: boolean;
@@ -30,7 +33,7 @@ interface Props {
 }
 
 export default function GameShell({
-    room, chatMessages, myUsername, phase, isHost,
+    room, chatMessages, myUsername, playerAvatars = {}, phase, isHost,
     header, children, gameScrollable = false,
     containerRef, onTabChange,
     scoreboard, roundEndContent, endContent, spectatorCount = 0,
@@ -144,15 +147,23 @@ export default function GameShell({
                             )}
                             {chatMessages.map((msg, i) => {
                                 const isMine = msg.username === myUsername;
+                                const gravatarUrl = playerAvatars[msg.username] || null;
                                 return (
-                                    <div key={i} className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}>
-                                        {!isMine && <span className="text-xs text-gray-500 px-1">{msg.username}</span>}
-                                        <div className={`max-w-[90%] px-3 py-1.5 rounded-2xl text-sm break-words ${
-                                            isMine
-                                                ? "bg-indigo-600 text-white rounded-tr-sm"
-                                                : "bg-gray-700 text-gray-100 rounded-tl-sm"
-                                        }`}>
-                                            {msg.text}
+                                    <div key={i} className={`flex gap-2 ${isMine ? "flex-row-reverse" : "flex-row"} items-end`}>
+                                        {!isMine && (
+                                            <div className="shrink-0 mb-0.5">
+                                                <Avatar username={msg.username} gravatarUrl={gravatarUrl} size="sm" />
+                                            </div>
+                                        )}
+                                        <div className={`flex flex-col gap-0.5 max-w-[80%] ${isMine ? "items-end" : "items-start"}`}>
+                                            {!isMine && <span className="text-xs text-gray-500 px-1">{msg.username}</span>}
+                                            <div className={`px-3 py-1.5 rounded-2xl text-sm break-words ${
+                                                isMine
+                                                    ? "bg-indigo-600 text-white rounded-tr-sm"
+                                                    : "bg-gray-700 text-gray-100 rounded-tl-sm"
+                                            }`}>
+                                                {msg.text}
+                                            </div>
                                         </div>
                                     </div>
                                 );

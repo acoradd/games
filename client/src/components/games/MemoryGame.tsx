@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, MemoryCard, MemoryGameState, ChatMsg } from "../../models/Lobby";
 import GameShell from "./GameShell";
+import Avatar from "../Avatar";
+import {X} from "lucide-react";
 
 const SYMBOLS = [
     "🎮","🎲","🎯","⚽","🏀","🎾","🏆","🚀","🌟","🎪",
@@ -122,6 +124,7 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
             room={room}
             chatMessages={chatMessages}
             myUsername={playerNames[sessionId] ?? ""}
+            playerAvatars={Object.fromEntries(players.map((p) => [p.username, p.gravatarUrl]))}
             phase={phase}
             isHost={isHost}
             spectatorCount={players.filter((p) => p.isSpectator).length}
@@ -177,13 +180,21 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
                                             : "text-gray-300"
                                     }`}
                                 >
-                                    <span className={`truncate flex items-center gap-1 ${isEliminated ? "line-through" : ""}`}>
-                                        {isCurrentTurn && !isEliminated && <span className="text-violet-400">▶</span>}
-                                        {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
-                                        {name}
-                                        {isMe && <span className="text-gray-600 text-xs">(vous)</span>}
-                                        {isEliminated && <span className="text-gray-600 text-xs ml-1">(éliminé)</span>}
-                                        {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
+                                    <span className={`truncate flex items-center gap-2 ${isEliminated ? "line-through" : ""}`}>
+                                        <Avatar username={name} gravatarUrl={p?.gravatarUrl || null} size="sm" />
+                                        <span className="flex items-center gap-1 truncate">
+                                            {isCurrentTurn && !isEliminated && <span className="text-violet-400">▶</span>}
+                                            {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
+                                            <span className="truncate">{name}</span>
+                                            {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
+                                            {isEliminated && <span className="text-gray-600 text-xs ml-1 shrink-0">(éliminé)</span>}
+                                            {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1 shrink-0">(reconnexion…)</span>}
+                                        </span>
+                                        {isHost && !isConnected && !isEliminated && (
+                                            <button onClick={() => room.send("kick", {sessionId: id})} title="Expulser" className="shrink-0 text-gray-600 hover:text-red-400 transition-colors ml-auto">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
                                     </span>
                                     {gameState.maxRounds > 1 ? (
                                         <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>

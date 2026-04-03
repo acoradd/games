@@ -1,6 +1,7 @@
 import { Room, Client, CloseCode, ServerError } from "colyseus";
 import { LobbyState, LobbyPlayer, ChatMessage } from "./schema/LobbyState.js";
 import { verifyToken } from "../services/player.service.js";
+import { createHash } from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { recordGameSessions } from "../services/profile.service.js";
 
@@ -12,6 +13,7 @@ interface JoinOptions {
 interface AuthPayload {
     playerId: number;
     username: string;
+    gravatarUrl: string;
 }
 
 // ── Round carry-over (between rounds of the same game) ─────────────────────
@@ -214,14 +216,14 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         this.autoDispose = true;
     }
 
-    onAuth(_client: Client, options: JoinOptions): AuthPayload {
+    async onAuth(_client: Client, options: JoinOptions): Promise<AuthPayload> {
         if (!options.token) {
             throw new ServerError(401, "Token manquant");
         }
 
-        let payload: AuthPayload;
+        let payload: { playerId: number; username: string };
         try {
-            payload = verifyToken(options.token) as AuthPayload;
+            payload = verifyToken(options.token) as { playerId: number; username: string };
         } catch {
             throw new ServerError(401, "Token invalide");
         }
@@ -230,7 +232,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             throw new ServerError(409, "Déjà connecté dans cette room");
         }
 
-        return payload;
+        const dbPlayer = await prisma.player.findUnique({
+            where: { id: payload.playerId },
+            select: { email: true },
+        });
+        const email = dbPlayer?.email ?? null;
+        const gravatarUrl = email
+            ? `https://www.gravatar.com/avatar/${createHash("md5").update(email.trim().toLowerCase()).digest("hex")}?d=retro&s=128`
+            : "";
+
+        return { ...payload, gravatarUrl };
     }
 
     onJoin(client: Client, _options: JoinOptions, auth: AuthPayload) {
@@ -246,6 +257,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const player = new LobbyPlayer();
         player.id = client.sessionId;
         player.username = auth.username.trim().slice(0, 32);
+        player.gravatarUrl = auth.gravatarUrl;
         player.isHost = isFirstPlayer;
         player.isReady = false;
         player.isConnected = true;
@@ -1492,6 +1504,43 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (this.state.chatHistory.length > 50) {
                 this.state.chatHistory.splice(0, 1);
             }
+        },
+
+        kick: (client: Client, data: { sessionId: string }) => {
+            if (client.sessionId !== this.state.hostId) return;
+            const target = data?.sessionId;
+            if (!target || target === client.sessionId) return;
+
+            const targetPlayer = this.state.players.get(target);
+            if (!targetPlayer) return;
+
+            if (this.state.status === "game") {
+                // In-game: only kick players currently in the reconnection window
+                if (targetPlayer.isConnected || targetPlayer.isEliminated) return;
+                this.eliminatePlayer(target);
+            } else {
+                // Lobby: kick any connected player
+                const targetClient = this.clients.find((c) => c.sessionId === target);
+                if (!targetClient) return;
+                targetClient.send("kicked");
+                targetClient.leave(4001);
+            }
+        },
+
+        forceEndRound: (client: Client) => {
+            if (client.sessionId !== this.state.hostId) return;
+            if (this.state.status !== "game") return;
+            if (this.state.selectedGameSlug !== "motus") return;
+
+            let gs: MotusGameState;
+            try {
+                gs = JSON.parse(this.state.gameStateJson) as MotusGameState;
+            } catch { return; }
+
+            if (gs.phase !== "playing" || gs.mode !== "coop") return;
+
+            this.endMotusRound(gs, null);
+            this.state.gameStateJson = JSON.stringify(gs);
         },
 
         returnToLobby: (client: Client) => {

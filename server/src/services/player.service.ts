@@ -1,6 +1,13 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import { createHash } from "crypto";
 import { prisma } from "../lib/prisma.js";
+
+function gravatarUrl(email: string | null): string | null {
+    if (!email) return null;
+    const hash = createHash("md5").update(email.trim().toLowerCase()).digest("hex");
+    return `https://www.gravatar.com/avatar/${hash}?d=retro&s=128`;
+}
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "changeme_dev";
 const BCRYPT_ROUNDS = 10;
@@ -26,7 +33,7 @@ export async function registerPlayer(username: string, password: string) {
     );
 
     const { passwordHash: _, ...safePlayer } = player;
-    return { player: safePlayer, token };
+    return { player: { ...safePlayer, gravatarUrl: gravatarUrl(safePlayer.email) }, token };
 }
 
 export async function loginPlayer(username: string, password: string) {
@@ -52,7 +59,7 @@ export async function loginPlayer(username: string, password: string) {
     );
 
     const { passwordHash: _, ...safePlayer } = player;
-    return { player: safePlayer, token };
+    return { player: { ...safePlayer, gravatarUrl: gravatarUrl(safePlayer.email) }, token };
 }
 
 export function verifyToken(token: string) {

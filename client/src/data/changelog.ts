@@ -12,6 +12,18 @@ export interface ChangelogVersion {
 
 export const changelog: ChangelogVersion[] = [
     {
+        version: '0.6',
+        date: '03/04/2026',
+        entries: [
+            { date: '03/04/2026', type: 'feat', label: 'Système de comptes persistants avec mot de passe (fin des joueurs anonymes)' },
+            { date: '03/04/2026', type: 'feat', label: 'Page de profil avec historique des parties et détail des scores par joueur' },
+            { date: '03/04/2026', type: 'feat', label: 'Page paramètres : changement de mot de passe et email pour Gravatar' },
+            { date: '03/04/2026', type: 'feat', label: 'Avatars Gravatar affichés dans le lobby, le chat, les scoreboards et l\'historique' },
+            { date: '03/04/2026', type: 'feat', label: 'L\'hôte peut expulser un joueur du lobby ou en reconnexion pendant la partie' },
+            { date: '03/04/2026', type: 'feat', label: 'L\'hôte peut forcer la fin d\'une manche en mode coop (Motus)' },
+        ],
+    },
+    {
         version: '0.5',
         date: '26/02/2026',
         entries: [

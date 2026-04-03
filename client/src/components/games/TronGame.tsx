@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, TronGameState, ChatMsg } from "../../models/Lobby";
 import GameShell from "./GameShell";
+import Avatar from "../Avatar";
+import {X} from "lucide-react";
 import DPad, { isTouchDevice } from "./DPad";
 
 interface Props {
@@ -148,6 +150,7 @@ export default function TronGame({ room, sessionId, gameState, players, chatMess
             room={room}
             chatMessages={chatMessages}
             myUsername={playerNames[sessionId] ?? ""}
+            playerAvatars={Object.fromEntries(players.map((p) => [p.username, p.gravatarUrl]))}
             phase={phase}
             isHost={isHost}
             spectatorCount={players.filter((p) => p.isSpectator).length}
@@ -188,14 +191,24 @@ export default function TronGame({ room, sessionId, gameState, players, chatMess
                                 <li key={id} className={`flex items-center justify-between gap-2 text-sm ${
                                     isEliminated ? "text-gray-600" : isAlive ? "text-gray-200" : "text-gray-500"
                                 }`}>
-                                    <span className={`truncate flex items-center gap-1.5 ${isEliminated ? "line-through" : ""}`}>
-                                        {gp && <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: gp.color }} />}
-                                        {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
-                                        {playerNames[id] ?? id}
-                                        {id === sessionId && <span className="text-gray-600 text-xs">(vous)</span>}
-                                        {isEliminated && <span className="text-gray-600 text-xs ml-1">✕</span>}
-                                        {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1">(reconnexion…)</span>}
-                                        {!isAlive && !isEliminated && isConnected && <span className="text-gray-600 text-xs ml-1">mort</span>}
+                                    <span className={`truncate flex items-center gap-2 ${isEliminated ? "line-through" : ""}`}>
+                                        <div className="relative shrink-0">
+                                            <Avatar username={playerNames[id] ?? id} gravatarUrl={lp?.gravatarUrl || null} size="sm" />
+                                            {gp && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950" style={{ backgroundColor: gp.color }} />}
+                                        </div>
+                                        <span className="flex items-center gap-1 truncate">
+                                            {!isConnected && !isEliminated && <span title="Reconnexion…">🔴</span>}
+                                            <span className="truncate">{playerNames[id] ?? id}</span>
+                                            {id === sessionId && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
+                                            {isEliminated && <span className="text-gray-600 text-xs ml-1 shrink-0">✕</span>}
+                                            {!isConnected && !isEliminated && <span className="text-gray-500 text-xs ml-1 shrink-0">(reconnexion…)</span>}
+                                            {!isAlive && !isEliminated && isConnected && <span className="text-gray-600 text-xs ml-1 shrink-0">mort</span>}
+                                        </span>
+                                        {isHost && !isConnected && !isEliminated && (
+                                            <button onClick={() => room.send("kick", {sessionId: id})} title="Expulser" className="shrink-0 text-gray-600 hover:text-red-400 transition-colors ml-auto">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
                                     </span>
                                     {gameState.maxRounds > 1 ? (
                                         <span className="font-bold shrink-0 text-indigo-400">{pts}pt</span>

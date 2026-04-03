@@ -1,6 +1,7 @@
 export interface LobbyPlayer {
     id: string;
     username: string;
+    gravatarUrl: string;
     isHost: boolean;
     isReady: boolean;
     isConnected: boolean;

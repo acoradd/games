@@ -1,6 +1,6 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Clipboard, Check, Link, Send} from 'lucide-react';
+import {Clipboard, Check, Link, Send, X} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
@@ -9,6 +9,7 @@ import {getGameModes} from '../services/gameModeService';
 import {joinLobby} from '../services/lobbyService';
 import {getStoredPlayer} from '../services/playerService';
 import {clearCurrentRoom, getCurrentRoom, setCurrentRoom} from '../webservices/currentLobbyRoom';
+import Avatar from '../components/Avatar';
 
 function getBigUrl(slug: string) {
     return `/assets/games/${slug}/big.png`;
@@ -127,7 +128,8 @@ export default function LobbyPage() {
             if (typeof (playersRaw as Map<string, unknown>).forEach === 'function') {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
                     list.push({
-                        id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                        id: p.id, username: p.username, gravatarUrl: p.gravatarUrl ?? '',
+                        isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
                         isSpectator: p.isSpectator ?? false
                     })
@@ -136,7 +138,8 @@ export default function LobbyPage() {
                 // fallback plain object
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
                     list.push({
-                        id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                        id: p.id, username: p.username, gravatarUrl: p.gravatarUrl ?? '',
+                        isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
                         isSpectator: p.isSpectator ?? false
                     })
@@ -234,6 +237,10 @@ export default function LobbyPage() {
                     navigate(`/game/${gameSlug}/play/${gRoomId}`);
                 });
 
+                room.onMessage('kicked', () => {
+                    navigate('/', {state: {kicked: true}});
+                });
+
                 setLoading(false);
             } catch (err: unknown) {
                 console.error('[LobbyPage] connect error:', err);
@@ -292,6 +299,10 @@ export default function LobbyPage() {
         if (!chatInput.trim()) return;
         roomRef.current?.send('chat', {text: chatInput.trim()});
         setChatInput('');
+    }
+
+    function handleKick(sessionId: string) {
+        roomRef.current?.send('kick', {sessionId});
     }
 
     async function handleCopy(type: 'code' | 'link') {
@@ -493,11 +504,13 @@ export default function LobbyPage() {
                         </p>
                         <ul className="flex flex-col gap-2">
                             {players.map((p) => (
-                                <li key={p.id} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span
-                                            className={`w-2 h-2 rounded-full shrink-0 ${p.isReady ? 'bg-emerald-400' : 'bg-gray-600'}`}/>
-                                        <span className="text-sm font-medium truncate max-w-28">
+                                <li key={p.id} className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="relative shrink-0">
+                                            <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
+                                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${p.isReady ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                                        </div>
+                                        <span className="text-sm font-medium truncate">
                                             {p.username}
                                             {p.id === sessionId && (
                                                 <span className="text-gray-600 text-xs ml-1">(vous)</span>
@@ -506,12 +519,20 @@ export default function LobbyPage() {
                                     </div>
                                     <div className="flex items-center gap-1.5 text-xs shrink-0">
                                         {p.isHost && (
-                                            <span
-                                                className="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">host</span>
+                                            <span className="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">host</span>
                                         )}
                                         <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
                                             {p.isReady ? 'prêt' : 'attente'}
                                         </span>
+                                        {isHost && p.id !== sessionId && (
+                                            <button
+                                                onClick={() => handleKick(p.id)}
+                                                title="Expulser"
+                                                className="ml-1 text-gray-600 hover:text-red-400 transition-colors"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                     </div>
                                 </li>
                             ))}
@@ -528,18 +549,23 @@ export default function LobbyPage() {
                             )}
                             {chatMessages.map((msg, i) => {
                                 const isMine = msg.username === players.find((p) => p.id === sessionId)?.username;
+                                const sender = players.find((p) => p.username === msg.username);
                                 return (
-                                    <div key={i}
-                                         className={`flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
+                                    <div key={i} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'} items-end`}>
                                         {!isMine && (
-                                            <span className="text-xs text-gray-500 px-1">{msg.username}</span>
+                                            <div className="shrink-0 mb-0.5">
+                                                <Avatar username={msg.username} gravatarUrl={sender?.gravatarUrl || null} size="sm" />
+                                            </div>
                                         )}
-                                        <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
-                                            isMine
-                                                ? 'bg-indigo-600 text-white rounded-tr-sm'
-                                                : 'bg-gray-700 text-gray-100 rounded-tl-sm'
-                                        }`}>
-                                            {msg.text}
+                                        <div className={`flex flex-col gap-0.5 max-w-[80%] ${isMine ? 'items-end' : 'items-start'}`}>
+                                            {!isMine && <span className="text-xs text-gray-500 px-1">{msg.username}</span>}
+                                            <div className={`px-3 py-1.5 rounded-2xl text-sm break-words ${
+                                                isMine
+                                                    ? 'bg-indigo-600 text-white rounded-tr-sm'
+                                                    : 'bg-gray-700 text-gray-100 rounded-tl-sm'
+                                            }`}>
+                                                {msg.text}
+                                            </div>
                                         </div>
                                     </div>
                                 );

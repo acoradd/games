@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {User, Settings, LogOut, ChevronDown} from 'lucide-react';
-import {useNavigate} from 'react-router-dom';
+import Avatar from '../components/Avatar';
+import {useNavigate, useLocation} from 'react-router-dom';
 import GameCard from '../components/GameCard';
 import JoinRoomForm from '../components/JoinRoomForm';
 import type {GameMode} from '../models/GameMode';
@@ -16,6 +17,8 @@ export default function HomePage() {
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+    const location = useLocation();
+    const wasKicked = (location.state as Record<string, unknown> | null)?.kicked === true;
     const storedPlayer = getStoredPlayer();
 
     useEffect(() => {
@@ -49,8 +52,6 @@ export default function HomePage() {
         navigate('/');
     }
 
-    const initial = storedPlayer?.player.username?.[0].toUpperCase() ?? '';
-
     const typeBadge: Record<ChangelogVersion['entries'][number]['type'], string> = {
         feat: 'bg-indigo-900/50 text-indigo-300 border border-indigo-700',
         fix: 'bg-amber-900/40 text-amber-300 border border-amber-700',
@@ -80,9 +81,7 @@ export default function HomePage() {
                                 onClick={() => setMenuOpen((o) => !o)}
                                 className="flex items-center gap-2.5 hover:bg-gray-800 rounded-xl px-3 py-2 transition-colors"
                             >
-                                <span className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold shrink-0">
-                                    {initial}
-                                </span>
+                                <Avatar username={storedPlayer.player.username} gravatarUrl={storedPlayer.player.gravatarUrl ?? null} size="sm" />
                                 <span className="text-sm text-gray-300 font-medium">{storedPlayer.player.username}</span>
                                 <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
                             </button>
@@ -127,6 +126,12 @@ export default function HomePage() {
 
             <main className="flex-auto overflow-y-auto">
                 <section className="max-w-5xl mx-auto px-6 py-10">
+
+                    {wasKicked && (
+                        <p className="mb-6 text-sm text-amber-400 bg-amber-900/20 border border-amber-800 rounded-xl px-4 py-3">
+                            Tu as été expulsé du lobby par l'hôte.
+                        </p>
+                    )}
 
                     <section className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col justify-between gap-4">

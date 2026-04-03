@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState } from "../models/Lobby";
+import Avatar from "./Avatar";
 
 interface LobbyRoomProps {
     room: Room<LobbyState>;
@@ -92,10 +93,11 @@ export default function LobbyRoom({ room, gameSlug }: LobbyRoomProps) {
                                 key={p.id}
                                 className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-2.5"
                             >
-                                <div className="flex items-center gap-2">
-                                    <span
-                                        className={`w-2 h-2 rounded-full ${p.isReady ? "bg-emerald-400" : "bg-gray-500"}`}
-                                    />
+                                <div className="flex items-center gap-3">
+                                    <div className="relative">
+                                        <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
+                                        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-800 ${p.isReady ? "bg-emerald-400" : "bg-gray-500"}`} />
+                                    </div>
                                     <span className="font-medium">
                                         {p.username}
                                         {p.id === mySessionId && (

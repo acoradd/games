@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getProfile, changePassword, getGameSessions } from "../services/profile.service.js";
+import { getProfile, changePassword, getGameSessions, updateEmail } from "../services/profile.service.js";
 
 type AuthedRequest = Request & { player: { playerId: number; username: string } };
 
@@ -31,6 +31,22 @@ export async function updatePassword(req: Request, res: Response) {
     } catch (err) {
         if (err instanceof Error && err.message === "INVALID_CREDENTIALS") {
             res.status(401).json({ error: "Mot de passe actuel incorrect" });
+            return;
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+}
+
+export async function putEmail(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    const { email } = req.body as { email?: string | null };
+
+    try {
+        await updateEmail(playerId, email ?? null);
+        res.json({ ok: true });
+    } catch (err) {
+        if (err instanceof Error && err.message === "INVALID_EMAIL") {
+            res.status(400).json({ error: "Format d'email invalide" });
             return;
         }
         res.status(500).json({ error: "Internal server error" });

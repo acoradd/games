@@ -6,6 +6,8 @@ import type {
     ChatMsg,
 } from "../../models/Lobby";
 import GameShell from "./GameShell";
+import Avatar from "../Avatar";
+import {X} from "lucide-react";
 
 // ── AZERTY layout ─────────────────────────────────────────────────────────────
 
@@ -363,15 +365,23 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                             isElim ? "text-gray-600" : isCoopTurn ? "text-indigo-300" : "text-gray-300"
                         }`}>
                             {/* Name row */}
-                            <span className={`flex items-center gap-1 truncate ${isElim ? "line-through" : ""}`}>
-                                {isCoopTurn  && <span className="text-indigo-400">▶</span>}
-                                {solved && !isElim && <span className="text-green-400">✓</span>}
-                                {!isConnected && !isElim && <span title="Reconnexion…">🔴</span>}
-                                <span className="truncate">{playerNames[id] ?? id}</span>
-                                {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
-                                {isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">(éliminé)</span>}
-                                {maxRounds > 1 && (
-                                    <span className="font-bold shrink-0 text-indigo-400 ml-auto">{pts}pt</span>
+                            <span className={`flex items-center gap-2 ${isElim ? "line-through" : ""}`}>
+                                <Avatar username={playerNames[id] ?? id} gravatarUrl={p?.gravatarUrl || null} size="sm" />
+                                <span className="flex items-center gap-1 truncate flex-1 min-w-0">
+                                    {isCoopTurn  && <span className="text-indigo-400">▶</span>}
+                                    {solved && !isElim && <span className="text-green-400">✓</span>}
+                                    {!isConnected && !isElim && <span title="Reconnexion…">🔴</span>}
+                                    <span className="truncate">{playerNames[id] ?? id}</span>
+                                    {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
+                                    {isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">(éliminé)</span>}
+                                    {maxRounds > 1 && (
+                                        <span className="font-bold shrink-0 text-indigo-400 ml-auto">{pts}pt</span>
+                                    )}
+                                </span>
+                                {isHost && !isConnected && !isElim && (
+                                    <button onClick={() => room.send("kick", {sessionId: id})} title="Expulser" className="shrink-0 text-gray-600 hover:text-red-400 transition-colors">
+                                        <X className="w-3 h-3" />
+                                    </button>
                                 )}
                             </span>
                             {/* VS: attempt count + elapsed + last guess colors */}
@@ -399,6 +409,14 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                     );
                 })}
             </ul>
+            {isHost && mode === "coop" && phase === "playing" && (
+                <button
+                    onClick={() => room.send("forceEndRound")}
+                    className="mt-4 w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded-lg py-1.5 transition-colors"
+                >
+                    Terminer la manche
+                </button>
+            )}
         </>
     );
 
@@ -518,6 +536,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             room={room}
             chatMessages={chatMessages}
             myUsername={playerNames[sessionId] ?? ""}
+            playerAvatars={Object.fromEntries(players.map((p) => [p.username, p.gravatarUrl]))}
             phase={phase}
             isHost={isHost}
             spectatorCount={players.filter((p) => p.isSpectator).length}

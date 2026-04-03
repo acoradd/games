@@ -9,6 +9,7 @@ export class ChatMessage extends Schema {
 export class LobbyPlayer extends Schema {
     @type("string") id: string = "";
     @type("string") username: string = "";
+    @type("string") gravatarUrl: string = "";
     @type("boolean") isHost: boolean = false;
     @type("boolean") isReady: boolean = false;
     @type("boolean") isConnected: boolean = true;

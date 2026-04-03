@@ -5,6 +5,7 @@ import { getStoredPlayer } from '../services/playerService';
 import { fetchProfile, fetchGameSessions } from '../services/profileService';
 import type { GameSession } from '../services/profileService';
 import type { Player } from '../models/Player';
+import Avatar from '../components/Avatar';
 
 const GAME_LABELS: Record<string, string> = {
     memory: 'Memory',
@@ -69,9 +70,7 @@ export default function ProfilePage() {
                 {/* Infos */}
                 {!loadingProfile && player && (
                     <section className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center text-2xl font-bold shrink-0">
-                            {player.username[0].toUpperCase()}
-                        </div>
+                        <Avatar username={player.username} gravatarUrl={player.gravatarUrl} size="lg" />
                         <div>
                             <p className="text-xl font-bold">{player.username}</p>
                             <p className="text-sm text-gray-500">
@@ -132,8 +131,8 @@ export default function ProfilePage() {
                                     {sessions.map((s) => {
                                         const isOpen = expandedGameId === s.gameId;
                                         const allPlayers = [
-                                            { username: player?.username ?? '…', result: s.result, score: s.score, isMe: true },
-                                            ...s.coPlayers.map((cp) => ({ ...cp, isMe: false })),
+                                            { username: player?.username ?? '…', result: s.result, score: s.score, gravatarUrl: player?.gravatarUrl ?? null, isMe: true },
+                                            ...s.coPlayers.map((cp) => ({ ...cp, gravatarUrl: cp.gravatarUrl ?? null, isMe: false })),
                                         ].sort((a, b) => b.score - a.score);
 
                                         return (
@@ -168,7 +167,8 @@ export default function ProfilePage() {
                                                             <ul className="flex flex-col gap-1.5">
                                                                 {allPlayers.map((p, i) => (
                                                                     <li key={i} className="flex items-center justify-between gap-4 text-sm">
-                                                                        <span className={p.isMe ? 'text-white font-semibold' : 'text-gray-300'}>
+                                                                        <span className={`flex items-center gap-2 ${p.isMe ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                                                                            <Avatar username={p.username} gravatarUrl={p.gravatarUrl} size="sm" />
                                                                             {p.username}{p.isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
                                                                         </span>
                                                                         <div className="flex items-center gap-3">

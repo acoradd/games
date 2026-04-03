@@ -6,6 +6,7 @@ export interface CoPlayer {
     username: string;
     result: "win" | "loss";
     score: number;
+    gravatarUrl?: string | null;
 }
 
 export interface GameSession {
@@ -28,6 +29,10 @@ export async function updatePassword(currentPassword: string, newPassword: strin
         currentPassword: await sha256(currentPassword),
         newPassword: await sha256(newPassword),
     });
+}
+
+export async function updateEmail(email: string | null): Promise<void> {
+    await api.put("/api/profile/me/email", { email });
 }
 
 export async function fetchGameSessions(): Promise<GameSession[]> {
