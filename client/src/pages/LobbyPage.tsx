@@ -1,5 +1,6 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {Clipboard, Check, Link, Send} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
@@ -351,7 +352,7 @@ export default function LobbyPage() {
                                 className="text-gray-400 hover:text-white text-xs transition-colors"
                                 title="Copier le code"
                             >
-                                {copied === 'code' ? '✓' : '📋'}
+                                {copied === 'code' ? <Check className="w-3.5 h-3.5" /> : <Clipboard className="w-3.5 h-3.5" />}
                             </button>
                         </div>
                         {/* QR code popup */}
@@ -370,7 +371,8 @@ export default function LobbyPage() {
                         onClick={() => handleCopy('link')}
                         className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg px-3 py-1.5 text-sm transition-colors"
                     >
-                        🔗 {copied === 'link' ? 'Lien copié ✓' : 'Copier le lien'}
+                        <Link className="w-3.5 h-3.5" />
+                        {copied === 'link' ? <><Check className="w-3.5 h-3.5" /> Lien copié</> : 'Copier le lien'}
                     </button>
                 </div>
             </header>
@@ -559,7 +561,7 @@ export default function LobbyPage() {
                                 disabled={!chatInput.trim()}
                                 className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white px-3 py-2 rounded-lg transition-colors text-sm"
                             >
-                                ↑
+                                <Send className="w-4 h-4" />
                             </button>
                         </form>
                     </div>
@@ -577,7 +579,7 @@ export default function LobbyPage() {
                             : 'bg-gray-700 hover:bg-gray-600 text-white'
                     }`}
                 >
-                    {me?.isReady ? '✓ Prêt' : 'Prêt ?'}
+                    {me?.isReady ? <><Check className="w-4 h-4 inline-block mr-1" />Prêt</> : 'Prêt ?'}
                 </button>
 
                 {isHost && (

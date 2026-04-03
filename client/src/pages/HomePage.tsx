@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import {User, Settings, LogOut, ChevronDown} from 'lucide-react';
 import {useNavigate} from 'react-router-dom';
 import GameCard from '../components/GameCard';
 import JoinRoomForm from '../components/JoinRoomForm';
@@ -83,9 +84,7 @@ export default function HomePage() {
                                     {initial}
                                 </span>
                                 <span className="text-sm text-gray-300 font-medium">{storedPlayer.player.username}</span>
-                                <svg className={`w-3.5 h-3.5 text-gray-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none">
-                                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
+                                <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
                             </button>
 
                             {menuOpen && (
@@ -94,15 +93,22 @@ export default function HomePage() {
                                         onClick={() => { setMenuOpen(false); navigate('/profile'); }}
                                         className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2.5"
                                     >
-                                        <span className="text-gray-500">👤</span>
+                                        <User className="w-4 h-4 text-gray-500" />
                                         Mon profil
+                                    </button>
+                                    <button
+                                        onClick={() => { setMenuOpen(false); navigate('/settings'); }}
+                                        className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2.5"
+                                    >
+                                        <Settings className="w-4 h-4 text-gray-500" />
+                                        Paramètres
                                     </button>
                                     <div className="border-t border-gray-800"/>
                                     <button
                                         onClick={handleLogout}
                                         className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-gray-800 hover:text-red-300 transition-colors flex items-center gap-2.5"
                                     >
-                                        <span>↩</span>
+                                        <LogOut className="w-4 h-4" />
                                         Déconnexion
                                     </button>
                                 </div>

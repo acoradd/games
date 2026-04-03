@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Settings, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getStoredPlayer } from '../services/playerService';
-import { fetchProfile, updatePassword, fetchGameSessions } from '../services/profileService';
+import { fetchProfile, fetchGameSessions } from '../services/profileService';
 import type { GameSession } from '../services/profileService';
 import type { Player } from '../models/Player';
 
@@ -29,13 +30,6 @@ export default function ProfilePage() {
 
     const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
 
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [pwError, setPwError] = useState<string | null>(null);
-    const [pwSuccess, setPwSuccess] = useState(false);
-    const [pwLoading, setPwLoading] = useState(false);
-
     useEffect(() => {
         if (!stored) {
             navigate('/auth', { state: { returnTo: '/profile' } });
@@ -48,35 +42,6 @@ export default function ProfilePage() {
             .then(setSessions)
             .finally(() => setLoadingSessions(false));
     }, []);
-
-    async function handlePasswordChange(e: React.FormEvent) {
-        e.preventDefault();
-        setPwError(null);
-        setPwSuccess(false);
-
-        if (newPassword.length < 6) {
-            setPwError('Le nouveau mot de passe doit contenir au moins 6 caractères');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            setPwError('Les mots de passe ne correspondent pas');
-            return;
-        }
-
-        setPwLoading(true);
-        try {
-            await updatePassword(currentPassword, newPassword);
-            setPwSuccess(true);
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-        } catch (err: unknown) {
-            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-            setPwError(msg ?? 'Une erreur est survenue');
-        } finally {
-            setPwLoading(false);
-        }
-    }
 
     const wins = sessions.filter((s) => s.result === 'win').length;
     const losses = sessions.filter((s) => s.result === 'loss').length;
@@ -91,6 +56,12 @@ export default function ProfilePage() {
                 </button>
                 <span className="text-gray-700">|</span>
                 <span className="font-bold text-white">Mon profil</span>
+                <button
+                    onClick={() => navigate('/settings')}
+                    className="ml-auto text-sm text-gray-500 hover:text-white transition-colors flex items-center gap-1.5"
+                >
+                    <Settings className="w-4 h-4" /> Paramètres
+                </button>
             </header>
 
             <main className="flex-1 max-w-3xl w-full mx-auto px-6 py-10 flex flex-col gap-8">
@@ -133,63 +104,6 @@ export default function ProfilePage() {
                             )}
                         </div>
                     )}
-                </section>
-
-                {/* Changer mot de passe */}
-                <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                    <h2 className="text-base font-semibold text-white mb-5">Changer le mot de passe</h2>
-                    <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 max-w-sm">
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-sm text-gray-400">Mot de passe actuel</label>
-                            <input
-                                type="password"
-                                value={currentPassword}
-                                onChange={(e) => setCurrentPassword(e.target.value)}
-                                placeholder="••••••••"
-                                required
-                                className="bg-gray-800 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-sm text-gray-400">Nouveau mot de passe</label>
-                            <input
-                                type="password"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder="••••••••"
-                                required
-                                className="bg-gray-800 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-sm text-gray-400">Confirmer le nouveau mot de passe</label>
-                            <input
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                placeholder="••••••••"
-                                required
-                                className="bg-gray-800 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
-                            />
-                        </div>
-                        {pwError && (
-                            <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
-                                {pwError}
-                            </p>
-                        )}
-                        {pwSuccess && (
-                            <p className="text-emerald-400 text-sm bg-emerald-900/20 border border-emerald-800 rounded-xl px-4 py-2.5">
-                                Mot de passe mis à jour.
-                            </p>
-                        )}
-                        <button
-                            type="submit"
-                            disabled={pwLoading || !currentPassword || !newPassword || !confirmPassword}
-                            className="self-start bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
-                        >
-                            {pwLoading ? 'Mise à jour…' : 'Mettre à jour'}
-                        </button>
-                    </form>
                 </section>
 
                 {/* Historique */}
@@ -244,9 +158,7 @@ export default function ProfilePage() {
                                                     <td className="px-5 py-3 text-gray-300">{s.score}</td>
                                                     <td className="px-5 py-3 text-gray-500">{formatDate(s.playedAt)}</td>
                                                     <td className="px-5 py-3 text-gray-600 text-right">
-                                                        <svg className={`w-4 h-4 inline-block transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none">
-                                                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                                        </svg>
+                                                        <ChevronDown className={`w-4 h-4 inline-block transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                                                     </td>
                                                 </tr>
                                                 {isOpen && (
