@@ -6,6 +6,8 @@ import UsernameModal from '../components/UsernameModal';
 import type {GameMode} from '../models/GameMode';
 import {getGameModes} from '../services/gameModeService';
 import {createAnonymousPlayer, getStoredPlayer} from '../services/playerService';
+import {changelog} from '../data/changelog';
+import type {ChangelogVersion} from '../data/changelog';
 
 export default function HomePage() {
     const [gameModes, setGameModes] = useState<GameMode[]>([]);
@@ -45,6 +47,18 @@ export default function HomePage() {
     function handleCreateLobby() {
         navigate('/lobby/new');
     }
+
+    const typeBadge: Record<ChangelogVersion['entries'][number]['type'], string> = {
+        feat: 'bg-indigo-900/50 text-indigo-300 border border-indigo-700',
+        fix: 'bg-amber-900/40 text-amber-300 border border-amber-700',
+        chore: 'bg-gray-800 text-gray-400 border border-gray-700',
+    };
+
+    const typeLabel: Record<ChangelogVersion['entries'][number]['type'], string> = {
+        feat: 'nouveauté',
+        fix: 'correction',
+        chore: 'amélioration',
+    };
 
     return (
         <div className="h-dvh bg-gray-950 text-white flex flex-col">
@@ -102,6 +116,33 @@ export default function HomePage() {
                                 ))}
                             </div>
                         )}
+                    </section>
+
+                    <section className="mt-12">
+                        <h2 className="text-lg font-semibold text-gray-300 mb-4">Historique des modifications</h2>
+                        <div className="space-y-6">
+                            {changelog.map((version) => (
+                                <div key={version.version}
+                                     className="border border-gray-800 rounded-xl bg-gray-900/50 overflow-hidden">
+                                    <div
+                                        className="flex items-center gap-3 px-5 py-3 border-b border-gray-800 bg-gray-900">
+                                        <span className="text-sm font-bold text-white">v{version.version}</span>
+                                        <span className="text-xs text-gray-500">{version.date}</span>
+                                    </div>
+                                    <ul className="divide-y divide-gray-800/60">
+                                        {version.entries.map((entry, i) => (
+                                            <li key={i} className="flex items-center gap-3 px-5 py-2.5">
+                                                <span
+                                                    className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${typeBadge[entry.type]}`}>
+                                                    {typeLabel[entry.type]}
+                                                </span>
+                                                <span className="text-sm text-gray-300">{entry.label}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
                     </section>
 
                 </section>
