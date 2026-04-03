@@ -83,7 +83,7 @@ export default function ProfilePage() {
 
                 <section>
                     {!loadingSessions && sessions.length > 0 && (
-                        <div className="flex gap-6 mb-5">
+                        <div className="flex gap-6 mb-5 flex-wrap">
                             <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 text-center">
                                 <p className="text-2xl font-bold text-white">{sessions.length}</p>
                                 <p className="text-xs text-gray-500 mt-0.5">parties</p>
