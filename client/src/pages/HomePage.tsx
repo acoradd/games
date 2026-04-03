@@ -128,7 +128,7 @@ export default function HomePage() {
             <main className="flex-auto overflow-y-auto">
                 <section className="max-w-5xl mx-auto px-6 py-10">
 
-                    <section className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <section className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col justify-between gap-4">
                             <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Rejoindre</p>
                             <JoinRoomForm/>
