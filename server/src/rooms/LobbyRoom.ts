@@ -2,6 +2,7 @@ import { Room, Client, CloseCode, ServerError } from "colyseus";
 import { LobbyState, LobbyPlayer, ChatMessage } from "./schema/LobbyState.js";
 import { verifyToken } from "../services/player.service.js";
 import { prisma } from "../lib/prisma.js";
+import { recordGameSessions } from "../services/profile.service.js";
 
 interface JoinOptions {
     username?: string;
@@ -198,6 +199,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
     // Round carry-over between rounds of the same game session
     private prevRound: RoundCarryOver | null = null;
+
+    // Snapshot sessionId → playerId captured at game start for session recording
+    private playerIdSnapshot: Record<string, number> = {};
 
     // Motus server-only state
     private motusSecret: string = "";
@@ -512,6 +516,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
         }
         gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        if (gs.phase === "ended") {
+            void recordGameSessions("memory", this.playerIdSnapshot, gs.roundPoints);
+        }
         this.clearTurnTimer();
     }
 
@@ -556,6 +563,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
         }
         gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        if (gs.phase === "ended") {
+            void recordGameSessions("tron", this.playerIdSnapshot, gs.roundPoints);
+        }
         this.stopGameLoop();
         return true;
     }
@@ -581,6 +591,9 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
         }
         gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        if (gs.phase === "ended") {
+            void recordGameSessions("bomberman", this.playerIdSnapshot, gs.roundPoints);
+        }
         this.stopGameLoop();
         return true;
     }
@@ -676,6 +689,15 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
 
         gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";
+        if (gs.phase === "ended") {
+            let motusWinners: string[] | undefined;
+            if (gs.mode === "coop") {
+                // Coop : résultat collectif — victoire si l'équipe a trouvé au moins un mot
+                const teamWon = Object.values(gs.roundPoints).some((v) => v > 0);
+                motusWinners = teamWon ? gs.playerOrder : [];
+            }
+            void recordGameSessions("motus", this.playerIdSnapshot, gs.roundPoints, motusWinners);
+        }
     }
 
     private async initMotus(): Promise<void> {
@@ -1566,6 +1588,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
             this.prevRound = null;
             this.state.isStarted = true;
+
+            // Snapshot sessionId → playerId for session recording at game end
+            this.playerIdSnapshot = {};
+            this.sessionToPlayerId.forEach((playerId, sessionId) => {
+                this.playerIdSnapshot[sessionId] = playerId;
+            });
 
             const slug = this.state.selectedGameSlug;
             if (slug === "memory") {

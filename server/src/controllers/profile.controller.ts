@@ -1,0 +1,44 @@
+import { Request, Response } from "express";
+import { getProfile, changePassword, getGameSessions } from "../services/profile.service.js";
+
+type AuthedRequest = Request & { player: { playerId: number; username: string } };
+
+export async function getMe(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    try {
+        const player = await getProfile(playerId);
+        res.json(player);
+    } catch {
+        res.status(404).json({ error: "Player not found" });
+    }
+}
+
+export async function updatePassword(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    const { currentPassword, newPassword } = req.body as {
+        currentPassword?: string;
+        newPassword?: string;
+    };
+
+    if (!currentPassword || !newPassword) {
+        res.status(400).json({ error: "currentPassword and newPassword are required" });
+        return;
+    }
+
+    try {
+        await changePassword(playerId, currentPassword, newPassword);
+        res.json({ ok: true });
+    } catch (err) {
+        if (err instanceof Error && err.message === "INVALID_CREDENTIALS") {
+            res.status(401).json({ error: "Mot de passe actuel incorrect" });
+            return;
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+}
+
+export async function getSessions(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    const sessions = await getGameSessions(playerId);
+    res.json(sessions);
+}

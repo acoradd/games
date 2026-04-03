@@ -26,13 +26,29 @@ model GameMode {
 }
 
 model Player {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
-  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+  id           Int           @id @default(autoincrement())
+  username     String        @unique
+  passwordHash String        @map("password_hash")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  lastSeenAt   DateTime      @default(now()) @map("last_seen_at")
+  sessions     GameSession[]
 
   @@map("players")
+  @@schema("games")
+}
+
+model GameSession {
+  id           Int      @id @default(autoincrement())
+  gameId       String   @map("game_id")
+  playerId     Int      @map("player_id")
+  gameModeSlug String   @map("game_mode_slug")
+  result       String   // "win" | "loss"
+  score        Int      @default(0)
+  playedAt     DateTime @default(now()) @map("played_at")
+  player       Player   @relation(fields: [playerId], references: [id])
+
+  @@index([gameId])
+  @@map("game_sessions")
   @@schema("games")
 }
 
