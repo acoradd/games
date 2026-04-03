@@ -27,9 +27,8 @@ model GameMode {
 
 model Player {
   id           Int      @id @default(autoincrement())
-  username     String
-  isAnonymous  Boolean  @default(true) @map("is_anonymous")
-  passwordHash String?  @map("password_hash")
+  username     String   @unique
+  passwordHash String   @map("password_hash")
   createdAt    DateTime @default(now()) @map("created_at")
   lastSeenAt   DateTime @default(now()) @map("last_seen_at")
 

@@ -177,7 +177,7 @@ export default function LobbyPage() {
         let cancelled = false;
 
         if (!getStoredPlayer()) {
-            navigate('/', {state: {returnTo: location.pathname}});
+            navigate('/auth', {state: {returnTo: location.pathname}});
             return;
         }
 

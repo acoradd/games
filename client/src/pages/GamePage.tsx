@@ -221,7 +221,7 @@ export default function GamePage() {
         returningToLobbyRef.current = false;
 
         if (!getStoredPlayer()) {
-            navigate("/", { state: { returnTo: location.pathname } });
+            navigate("/auth", { state: { returnTo: location.pathname } });
             return;
         }
 

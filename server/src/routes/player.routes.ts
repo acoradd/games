@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { createAnonymous } from "../controllers/player.controller.js";
+import { register, login } from "../controllers/player.controller.js";
 
 const router = Router();
 
-router.post("/anonymous", createAnonymous);
+router.post("/register", register);
+router.post("/login", login);
 
 export default router;

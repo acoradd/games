@@ -13,7 +13,7 @@ export default function CreateLobbyPage() {
         creating.current = true;
 
         if (!getStoredPlayer()) {
-            navigate('/');
+            navigate('/auth', {state: {returnTo: '/lobby/new'}});
             return;
         }
 
