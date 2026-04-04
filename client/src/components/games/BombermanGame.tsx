@@ -17,10 +17,20 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
     const myPlayer = gsPlayers[sessionId];
 
     // ── Canvas ────────────────────────────────────────────────────────────────
-    const containerRef  = useRef<HTMLDivElement>(null);
-    const canvasRef     = useRef<HTMLCanvasElement>(null);
-    const gameStateRef  = useRef(gameState);
+    const containerRef   = useRef<HTMLDivElement>(null);
+    const canvasRef      = useRef<HTMLCanvasElement>(null);
+    const gameStateRef   = useRef(gameState);
     gameStateRef.current = gameState;
+
+    // Player sprite: one SVG template → one colored Image per player color
+    const svgTemplateRef  = useRef<string | null>(null);
+    const playerImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+    useEffect(() => {
+        fetch("/assets/games/bomberman/player.svg")
+            .then((r) => r.text())
+            .then((text) => { svgTemplateRef.current = text; });
+    }, []);
 
     const drawCanvas = useCallback(() => {
         const container = containerRef.current;
@@ -37,6 +47,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
+        // ── Grid ────────────────────────────────────────────────────────────
         for (let y = 0; y < rows; y++) {
             for (let x = 0; x < cols; x++) {
                 const ch = grid[y * cols + x];
@@ -48,19 +59,22 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             }
         }
 
+        // ── Explosions ───────────────────────────────────────────────────────
         ctx.fillStyle = "rgba(249,115,22,0.75)";
         explosions.forEach((exp) => {
             exp.cells.forEach(({ x, y }) => ctx.fillRect(x * cs, y * cs, cs, cs));
         });
 
+        // ── Bonuses ──────────────────────────────────────────────────────────
         bonuses.forEach((b) => {
             const emoji = b.type === "bomb" ? "💣" : b.type === "range" ? "🎯" : "🛡️";
-            ctx.font          = `${cs * 0.65}px sans-serif`;
-            ctx.textAlign     = "center";
-            ctx.textBaseline  = "middle";
+            ctx.font         = `${cs * 0.65}px sans-serif`;
+            ctx.textAlign    = "center";
+            ctx.textBaseline = "middle";
             ctx.fillText(emoji, (b.x + 0.5) * cs, (b.y + 0.5) * cs);
         });
 
+        // ── Bombs ────────────────────────────────────────────────────────────
         bombs.forEach((b) => {
             ctx.fillStyle = "#111827";
             ctx.beginPath();
@@ -70,21 +84,61 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
             ctx.lineWidth   = 1;
             ctx.stroke();
             const secondsLeft = Math.max(1, Math.ceil(b.fuseLeft * gs.bombTickMs / 1000));
-            ctx.fillStyle = secondsLeft <= 1 ? "#ef4444" : "#f9fafb";
-            ctx.font      = `bold ${cs * 0.38}px sans-serif`;
-            ctx.textAlign = "center";
+            ctx.fillStyle    = secondsLeft <= 1 ? "#ef4444" : "#f9fafb";
+            ctx.font         = `bold ${cs * 0.38}px sans-serif`;
+            ctx.textAlign    = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(String(secondsLeft), (b.x + 0.5) * cs, (b.y + 0.5) * cs);
         });
 
-        Object.entries(gsP).forEach(([sid, p]) => {
+        // ── Players ──────────────────────────────────────────────────────────
+        // Helper: get (or start loading) a colored SVG image for a given color.
+        function getPlayerImage(color: string): HTMLImageElement | null {
+            const cache    = playerImagesRef.current;
+            const template = svgTemplateRef.current;
+            if (!template) return null;
+
+            if (cache.has(color)) return cache.get(color)!;
+
+            // Replace base fill and currentColor references with the player color.
+            const colored = template
+                .replace(/fill="#888"/g, `fill="${color}"`)
+                .replace(/fill="currentColor"/g, `fill="${color}"`);
+
+            const blob = new Blob([colored], { type: "image/svg+xml" });
+            const url  = URL.createObjectURL(blob);
+            const img  = new Image();
+            img.onload = () => { URL.revokeObjectURL(url); drawCanvas(); };
+            img.src    = url;
+            cache.set(color, img);
+            return img.complete ? img : null;
+        }
+
+        Object.entries(gsP).forEach(([, p]) => {
             if (!p.alive) return;
             const blink = p.invincibleTicks > 0 && Math.floor(Date.now() / 150) % 2 === 0;
             ctx.globalAlpha = blink ? 0.35 : 1.0;
-            ctx.fillStyle   = p.color ?? "#888";
-            ctx.beginPath();
-            ctx.arc((p.x + 0.5) * cs, (p.y + 0.5) * cs, cs * 0.38, 0, Math.PI * 2);
-            ctx.fill();
+
+            const color = p.color ?? "#888";
+            const img   = getPlayerImage(color);
+
+            // SVG viewBox is 100×120 → aspect ratio 5:6
+            const spriteH = cs * 0.88;
+            const spriteW = spriteH * (100 / 120);
+            const sx = (p.x + 0.5) * cs - spriteW / 2;
+            const sy = p.y * cs + (cs - spriteH) / 2;
+
+            if (img && img.complete && img.naturalWidth > 0) {
+                ctx.drawImage(img, sx, sy, spriteW, spriteH);
+            } else {
+                // Fallback while image loads
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc((p.x + 0.5) * cs, (p.y + 0.5) * cs, cs * 0.38, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Shield ring
             if (p.shield) {
                 ctx.strokeStyle = "#a78bfa";
                 ctx.lineWidth   = 2;
@@ -92,11 +146,7 @@ export default function BombermanGame({ room, sessionId, gameState, players, cha
                 ctx.arc((p.x + 0.5) * cs, (p.y + 0.5) * cs, cs * 0.45, 0, Math.PI * 2);
                 ctx.stroke();
             }
-            ctx.fillStyle    = "#000";
-            ctx.font         = `bold ${cs * 0.4}px sans-serif`;
-            ctx.textAlign    = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText((gs.playerNames[sid] ?? "?")[0]!.toUpperCase(), (p.x + 0.5) * cs, (p.y + 0.5) * cs);
+
             ctx.globalAlpha = 1.0;
         });
     }, []);
