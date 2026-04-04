@@ -14,6 +14,26 @@ const GAME_LABELS: Record<string, string> = {
     motus: 'Motus',
 };
 
+
+interface GameStats {
+    slug: string;
+    played: number;
+    wins: number;
+    bestScore: number;
+}
+
+function computeGameStats(sessions: GameSession[]): GameStats[] {
+    const map = new Map<string, GameStats>();
+    for (const s of sessions) {
+        const existing = map.get(s.gameModeSlug) ?? { slug: s.gameModeSlug, played: 0, wins: 0, bestScore: 0 };
+        existing.played++;
+        if (s.result === 'win') existing.wins++;
+        if (s.score > existing.bestScore) existing.bestScore = s.score;
+        map.set(s.gameModeSlug, existing);
+    }
+    return [...map.values()].sort((a, b) => b.played - a.played);
+}
+
 function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('fr-FR', {
         day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -47,6 +67,7 @@ export default function ProfilePage() {
     const wins = sessions.filter((s) => s.result === 'win').length;
     const losses = sessions.filter((s) => s.result === 'loss').length;
     const winRate = sessions.length > 0 ? Math.round((wins / sessions.length) * 100) : null;
+    const gameStats = computeGameStats(sessions);
 
     return (
         <div className="min-h-dvh bg-gray-950 text-white flex flex-col">
@@ -104,6 +125,56 @@ export default function ProfilePage() {
                         </div>
                     )}
                 </section>
+
+                {/* Stats par jeu */}
+                {!loadingSessions && gameStats.length > 0 && (
+                    <section>
+                        <h2 className="text-base font-semibold text-white mb-4">Stats par jeu</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {gameStats.map((gs) => {
+                                const wr = Math.round((gs.wins / gs.played) * 100);
+                                return (
+                                    <div key={gs.slug} className="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 flex flex-col gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <img
+                                                src={`/assets/games/${gs.slug}/icon.png`}
+                                                alt={gs.slug}
+                                                className="w-10 h-10 rounded-lg object-cover shrink-0"
+                                            />
+                                            <span className="font-bold text-white">{GAME_LABELS[gs.slug] ?? gs.slug}</span>
+                                        </div>
+                                        <div className="flex gap-4 text-sm">
+                                            <div className="flex flex-col items-center">
+                                                <span className="font-bold text-white text-lg">{gs.played}</span>
+                                                <span className="text-gray-500 text-xs">parties</span>
+                                            </div>
+                                            <div className="flex flex-col items-center">
+                                                <span className="font-bold text-emerald-400 text-lg">{gs.wins}</span>
+                                                <span className="text-gray-500 text-xs">victoires</span>
+                                            </div>
+                                            <div className="flex flex-col items-center">
+                                                <span className="font-bold text-indigo-400 text-lg">{wr}%</span>
+                                                <span className="text-gray-500 text-xs">win rate</span>
+                                            </div>
+                                            {gs.bestScore > 0 && (
+                                                <div className="flex flex-col items-center">
+                                                    <span className="font-bold text-yellow-400 text-lg">{gs.bestScore}</span>
+                                                    <span className="text-gray-500 text-xs">meilleur score</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="w-full bg-gray-800 rounded-full h-1.5">
+                                            <div
+                                                className="bg-indigo-500 h-1.5 rounded-full transition-all"
+                                                style={{ width: `${wr}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
 
                 {/* Historique */}
                 <section>
