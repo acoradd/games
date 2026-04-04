@@ -100,6 +100,35 @@ export interface BombermanGameState {
     roundWinnerIds: string[];
 }
 
+// ── Generic game state (shared shell) ─────────────────────────────────────
+
+export interface GenericPlayerData {
+    /** Color dot for canvas games (Tron, Bomberman). */
+    color?: string;
+    /** Whether the player is alive this round (Tron, Bomberman). */
+    isAlive?: boolean;
+    /** Score for the current round (pairs in Memory, apples in Snake). */
+    roundScore?: number;
+    /** Unit label for roundScore (e.g. "paires"). */
+    roundScoreUnit?: string;
+}
+
+export interface GenericGameState {
+    phase: string;
+    playerOrder: string[];
+    playerNames: Record<string, string>;
+    roundPoints: Record<string, number>;
+    roundWinnerIds: string[];
+    currentRound: number;
+    maxRounds: number;
+    /** IDs of players that are currently "active" (alive, or taking a turn). */
+    activePlayerIds?: string[];
+    /** Per-player optional extras used by the generic scoreboard. */
+    playerData?: Record<string, GenericPlayerData>;
+    /** Optional subtitle shown under the winner name in the round-end overlay. */
+    roundWinnerSubtitle?: string;
+}
+
 // ── Motus ──────────────────────────────────────────────────────────────────
 
 export type MotusLetterResult = 'correct' | 'misplaced' | 'absent';

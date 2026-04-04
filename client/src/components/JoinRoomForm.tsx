@@ -14,7 +14,7 @@ export default function JoinRoomForm() {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex gap-2 w-full">
             <input
                 type="text"
                 value={code}
