@@ -190,7 +190,7 @@ export default function LobbyPage() {
             const storedToken = localStorage.getItem(`reconnect_${roomId}`);
             const storedSlug = localStorage.getItem(`game_slug_${roomId}`);
             if (storedToken && storedSlug) {
-                navigate(`/game/${storedSlug}/play/${roomId}`);
+                navigate(`/game/${storedSlug}/play/${roomId}`, {replace: true});
                 return;
             }
 
@@ -222,7 +222,7 @@ export default function LobbyPage() {
                         const slug = (s['selectedGameSlug'] as string) ?? '';
                         if (status === 'game' && slug) {
                             startingGameRef.current = true;
-                            navigate(`/game/${slug}/play/${roomId}`);
+                            navigate(`/game/${slug}/play/${roomId}`, {replace: true});
                             return;
                         }
                     }
@@ -234,11 +234,11 @@ export default function LobbyPage() {
 
                 room.onMessage('game:start', ({gameSlug, roomId: gRoomId}: { gameSlug: string; roomId: string }) => {
                     startingGameRef.current = true;
-                    navigate(`/game/${gameSlug}/play/${gRoomId}`);
+                    navigate(`/game/${gameSlug}/play/${gRoomId}`, {replace: true});
                 });
 
                 room.onMessage('kicked', () => {
-                    navigate('/', {state: {kicked: true}});
+                    navigate('/', {replace: true, state: {kicked: true}});
                 });
 
                 setLoading(false);
