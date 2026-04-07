@@ -21,7 +21,7 @@ interface AuthPayload {
     gravatarUrl: string;
 }
 
-export class LobbyRoom extends Room<LobbyState> {
+export class LobbyRoom extends Room<{ state: LobbyState }> {
     maxClients = 8;
 
     private playerIdMap         = new Map<number, string>();
