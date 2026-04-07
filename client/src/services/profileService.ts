@@ -39,3 +39,7 @@ export async function fetchGameSessions(): Promise<GameSession[]> {
     const { data } = await api.get<GameSession[]>("/api/profile/me/sessions");
     return data;
 }
+
+export async function deleteAccount(): Promise<void> {
+    await api.delete("/api/profile/me");
+}

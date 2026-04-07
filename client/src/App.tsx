@@ -7,6 +7,9 @@ import CreateLobbyPage from "./pages/CreateLobbyPage";
 import LobbyPage from "./pages/LobbyPage";
 import JoinLobbyPage from "./pages/JoinLobbyPage";
 import GamePage from "./pages/GamePage";
+import MentionsLegalesPage from "./pages/MentionsLegalesPage";
+import ConfidentialitePage from "./pages/ConfidentialitePage";
+import CguPage from "./pages/CguPage";
 
 function App() {
     return (
@@ -20,6 +23,9 @@ function App() {
                 <Route path="/lobby/:roomId" element={<LobbyPage />} />
                 <Route path="/join/:roomCode" element={<JoinLobbyPage />} />
                 <Route path="/game/:slug/play/:roomId" element={<GamePage />} />
+                <Route path="/mentions-legales" element={<MentionsLegalesPage />} />
+                <Route path="/confidentialite" element={<ConfidentialitePage />} />
+                <Route path="/cgu" element={<CguPage />} />
             </Routes>
         </BrowserRouter>
     );

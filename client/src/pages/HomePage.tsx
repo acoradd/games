@@ -224,6 +224,13 @@ export default function HomePage() {
 
                 </section>
             </main>
+
+            <footer className="border-t border-gray-800 px-6 py-4 text-center text-xs text-gray-600 flex flex-wrap justify-center gap-4">
+                <span>Accoradd Games — Projet open source</span>
+                <a href="/mentions-legales" className="hover:text-gray-400 transition-colors">Mentions légales</a>
+                <a href="/confidentialite" className="hover:text-gray-400 transition-colors">Politique de confidentialité</a>
+                <a href="/cgu" className="hover:text-gray-400 transition-colors">CGU</a>
+            </footer>
         </div>
     );
 }

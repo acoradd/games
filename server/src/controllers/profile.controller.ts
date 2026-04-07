@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getProfile, changePassword, getGameSessions, updateEmail } from "../services/profile.service.js";
+import { getProfile, changePassword, getGameSessions, updateEmail, deleteAccount } from "../services/profile.service.js";
 
 type AuthedRequest = Request & { player: { playerId: number; username: string } };
 
@@ -57,4 +57,14 @@ export async function getSessions(req: Request, res: Response) {
     const { playerId } = (req as AuthedRequest).player;
     const sessions = await getGameSessions(playerId);
     res.json(sessions);
+}
+
+export async function deleteMe(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    try {
+        await deleteAccount(playerId);
+        res.json({ ok: true });
+    } catch {
+        res.status(500).json({ error: "Internal server error" });
+    }
 }

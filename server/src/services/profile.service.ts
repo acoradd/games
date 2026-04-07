@@ -68,6 +68,11 @@ export async function getGameSessions(playerId: number) {
     }));
 }
 
+export async function deleteAccount(playerId: number) {
+    await prisma.gameSession.deleteMany({ where: { playerId } });
+    await prisma.player.delete({ where: { id: playerId } });
+}
+
 export async function recordGameSessions(
     slug: string,
     playerIdMap: Record<string, number>,

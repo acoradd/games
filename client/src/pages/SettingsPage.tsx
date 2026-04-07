@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getStoredPlayer, updateStoredPlayerGravatarUrl } from '../services/playerService';
-import { fetchProfile, updatePassword, updateEmail } from '../services/profileService';
+import { fetchProfile, updatePassword, updateEmail, deleteAccount } from '../services/profileService';
+import { clearStoredPlayer } from '../services/playerService';
 import Avatar from '../components/Avatar';
 import type { Player } from '../models/Player';
 
@@ -23,6 +24,11 @@ export default function SettingsPage() {
     const [pwError, setPwError] = useState<string | null>(null);
     const [pwSuccess, setPwSuccess] = useState(false);
     const [pwLoading, setPwLoading] = useState(false);
+
+    // Delete account
+    const [deleteConfirm, setDeleteConfirm] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Email
     const [email, setEmail] = useState('');
@@ -63,6 +69,19 @@ export default function SettingsPage() {
             setPwError(msg ?? 'Une erreur est survenue');
         } finally {
             setPwLoading(false);
+        }
+    }
+
+    async function handleDeleteAccount() {
+        setDeleteLoading(true);
+        setDeleteError(null);
+        try {
+            await deleteAccount();
+            clearStoredPlayer();
+            navigate('/');
+        } catch {
+            setDeleteError('Une erreur est survenue. Réessaie plus tard.');
+            setDeleteLoading(false);
         }
     }
 
@@ -221,6 +240,50 @@ export default function SettingsPage() {
                             {pwLoading ? 'Mise à jour…' : 'Mettre à jour'}
                         </button>
                     </form>
+                </section>
+
+                {/* Suppression du compte */}
+                <section className="bg-gray-900 border border-red-900/40 rounded-2xl p-6">
+                    <h2 className="text-base font-semibold text-red-400 mb-1">Supprimer mon compte</h2>
+                    <p className="text-sm text-gray-500 mb-5">
+                        Cette action est irréversible. Toutes tes données (pseudo, email, historique de parties) seront définitivement supprimées.
+                    </p>
+
+                    {!deleteConfirm ? (
+                        <button
+                            onClick={() => setDeleteConfirm(true)}
+                            className="bg-red-900/30 hover:bg-red-900/60 border border-red-800 text-red-400 hover:text-red-300 font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
+                        >
+                            Supprimer mon compte
+                        </button>
+                    ) : (
+                        <div className="flex flex-col gap-3 max-w-sm">
+                            <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">
+                                Es-tu sûr ? Cette action ne peut pas être annulée.
+                            </p>
+                            {deleteError && (
+                                <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
+                                    {deleteError}
+                                </p>
+                            )}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleDeleteAccount}
+                                    disabled={deleteLoading}
+                                    className="bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
+                                >
+                                    {deleteLoading ? 'Suppression…' : 'Oui, supprimer'}
+                                </button>
+                                <button
+                                    onClick={() => { setDeleteConfirm(false); setDeleteError(null); }}
+                                    disabled={deleteLoading}
+                                    className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
+                                >
+                                    Annuler
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </section>
 
             </main>
