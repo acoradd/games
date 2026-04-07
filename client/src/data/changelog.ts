@@ -12,6 +12,15 @@ export interface ChangelogVersion {
 
 export const changelog: ChangelogVersion[] = [
     {
+        version: '0.7',
+        date: '07/04/2026',
+        entries: [
+            { date: '07/04/2026', type: 'feat', label: 'Lancer directement un jeu depuis la page d\'accueil sans passer par la sélection du lobby' },
+            { date: '07/04/2026', type: 'feat', label: 'Rejoindre un lobby depuis un nouvel onglet déconnecte automatiquement l\'ancienne session' },
+            { date: '07/04/2026', type: 'fix', label: 'Page d\'erreur de connexion au lobby améliorée avec bouton pour créer un nouveau lobby' },
+        ],
+    },
+    {
         version: '0.6',
         date: '03/04/2026',
         entries: [
