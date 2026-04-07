@@ -6,7 +6,9 @@ import GameCard from '../components/GameCard';
 import JoinRoomForm from '../components/JoinRoomForm';
 import type {GameMode} from '../models/GameMode';
 import {getGameModes} from '../services/gameModeService';
+import {createLobby} from '../services/lobbyService';
 import {clearStoredPlayer, getStoredPlayer} from '../services/playerService';
+import {setCurrentRoom} from '../webservices/currentLobbyRoom';
 import {changelog} from '../data/changelog';
 import type {ChangelogVersion} from '../data/changelog';
 
@@ -14,6 +16,7 @@ export default function HomePage() {
     const [gameModes, setGameModes] = useState<GameMode[]>([]);
     const [loadingGames, setLoadingGames] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [launchingSlug, setLaunchingSlug] = useState<string | null>(null);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
@@ -44,6 +47,22 @@ export default function HomePage() {
             return;
         }
         navigate('/lobby/new');
+    }
+
+    async function handlePlayGame(slug: string) {
+        if (!storedPlayer) {
+            navigate('/auth', {state: {returnTo: '/lobby/new', gameSlug: slug}});
+            return;
+        }
+        setLaunchingSlug(slug);
+        try {
+            const room = await createLobby();
+            room.send('selectGame', {slug});
+            setCurrentRoom(room);
+            navigate(`/lobby/${room.roomId}`, {replace: true});
+        } catch {
+            setLaunchingSlug(null);
+        }
     }
 
     function handleLogout() {
@@ -167,7 +186,12 @@ export default function HomePage() {
                         {!loadingGames && !error && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 {gameModes.map((gm) => (
-                                    <GameCard key={gm.id} gameMode={gm}/>
+                                    <GameCard
+                                        key={gm.id}
+                                        gameMode={gm}
+                                        onPlay={() => handlePlayGame(gm.slug)}
+                                        loading={launchingSlug === gm.slug}
+                                    />
                                 ))}
                             </div>
                         )}

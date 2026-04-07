@@ -8,7 +8,9 @@ type Tab = 'login' | 'register';
 export default function AuthPage() {
     const navigate = useNavigate();
     const location = useLocation();
-    const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/';
+    const locationState = location.state as { returnTo?: string; gameSlug?: string } | null;
+    const returnTo = locationState?.returnTo ?? '/';
+    const gameSlug = locationState?.gameSlug;
 
     const [tab, setTab] = useState<Tab>('login');
     const [username, setUsername] = useState('');
@@ -39,7 +41,7 @@ export default function AuthPage() {
             } else {
                 await register(username.trim(), password);
             }
-            navigate(returnTo);
+            navigate(returnTo, {state: gameSlug ? {gameSlug} : undefined});
         } catch (err: unknown) {
             const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
             setError(msg ?? 'Une erreur est survenue');
