@@ -1,6 +1,6 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Clipboard, Check, Link, Send, X} from 'lucide-react';
+import {Clipboard, Check, Link, Send, X, WifiOff, Plus, Loader2} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
@@ -246,7 +246,7 @@ export default function LobbyPage() {
                 console.error('[LobbyPage] connect error:', err);
                 if (!cancelled) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    setError(`Erreur de connexion — ${msg}`);
+                    setError(msg);
                     setLoading(false);
                 }
             }
@@ -321,7 +321,10 @@ export default function LobbyPage() {
     if (loading) {
         return (
             <div className="h-dvh bg-gray-950 text-white flex items-center justify-center">
-                <p className="text-gray-400">Connexion au lobby…</p>
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
+                    <p className="text-gray-400 text-sm">Connexion au lobby…</p>
+                </div>
             </div>
         );
     }
@@ -329,11 +332,29 @@ export default function LobbyPage() {
     if (error) {
         return (
             <div className="h-dvh bg-gray-950 text-white flex items-center justify-center p-4">
-                <div className="text-center">
-                    <p className="text-red-400 mb-4">{error}</p>
-                    <button onClick={() => navigate('/')} className="text-gray-400 hover:text-white underline text-sm">
-                        Retour à l'accueil
-                    </button>
+                <div className="flex flex-col items-center gap-6 max-w-sm w-full">
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                        <WifiOff className="w-8 h-8 text-red-400" />
+                    </div>
+                    <div className="text-center">
+                        <h2 className="text-xl font-bold text-white mb-2">Impossible de rejoindre le lobby</h2>
+                        <p className="text-gray-500 text-sm font-mono">{error}</p>
+                    </div>
+                    <div className="flex flex-col gap-3 w-full">
+                        <button
+                            onClick={() => navigate('/lobby/new')}
+                            className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Créer un nouveau lobby
+                        </button>
+                        <button
+                            onClick={() => navigate('/')}
+                            className="w-full px-5 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-medium rounded-xl transition-colors text-sm"
+                        >
+                            Retour à l'accueil
+                        </button>
+                    </div>
                 </div>
             </div>
         );
