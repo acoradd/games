@@ -27,6 +27,7 @@ export class LobbyRoom extends Room<LobbyState> {
     private playerIdMap         = new Map<number, string>();
     private sessionToPlayerId   = new Map<string, number>();
     private staleSessionByPlayerId = new Map<number, string>();
+    private replacedSessions    = new Set<string>();
 
     private prevRound: RoundCarryOver | null = null;
     private playerIdSnapshot: Record<string, number> = {};
@@ -211,10 +212,6 @@ export class LobbyRoom extends Room<LobbyState> {
         try { payload = verifyToken(options.token) as { playerId: number; username: string }; }
         catch { throw new ServerError(401, "Token invalide"); }
 
-        if (this.playerIdMap.has(payload.playerId)) {
-            throw new ServerError(409, "Déjà connecté dans cette room");
-        }
-
         const dbPlayer = await prisma.player.findUnique({
             where: { id: payload.playerId },
             select: { email: true },
@@ -234,21 +231,50 @@ export class LobbyRoom extends Room<LobbyState> {
             this.staleSessionByPlayerId.delete(auth.playerId);
         }
 
+        // Session takeover: if the player is already connected, kick the old session
+        const existingSessionId = this.playerIdMap.get(auth.playerId);
+        let inheritedPlayer: LobbyPlayer | undefined;
+        if (existingSessionId) {
+            inheritedPlayer = this.state.players.get(existingSessionId);
+            this.replacedSessions.add(existingSessionId);
+            this.playerIdMap.delete(auth.playerId);
+            this.sessionToPlayerId.delete(existingSessionId);
+            this.state.players.delete(existingSessionId);
+            // Rename old sessionId to new one everywhere in the game state JSON
+            if (this.state.status === "game" && this.state.gameStateJson) {
+                this.state.gameStateJson = this.state.gameStateJson
+                    .replaceAll(existingSessionId, client.sessionId);
+            }
+            const oldClient = this.clients.find(c => c.sessionId === existingSessionId);
+            if (oldClient) {
+                oldClient.send("kicked", { reason: "session_replaced" });
+                oldClient.leave(4000);
+            }
+            console.log(`[LobbyRoom ${this.roomId}] ${auth.username} took over session ${existingSessionId}`);
+        }
+
         const isFirstPlayer = this.state.players.size === 0;
         const player        = new LobbyPlayer();
         player.id           = client.sessionId;
         player.username     = auth.username.trim().slice(0, 32);
         player.gravatarUrl  = auth.gravatarUrl;
-        player.isHost       = isFirstPlayer;
-        player.isReady      = false;
         player.isConnected  = true;
-        player.isEliminated = false;
 
-        if (isFirstPlayer) this.state.hostId = client.sessionId;
-
-        if (this.state.status === "game") {
-            player.isSpectator = true;
-            player.isReady     = true;
+        if (inheritedPlayer) {
+            player.isHost       = inheritedPlayer.isHost;
+            player.isReady      = inheritedPlayer.isReady;
+            player.isEliminated = inheritedPlayer.isEliminated;
+            player.isSpectator  = inheritedPlayer.isSpectator;
+            if (inheritedPlayer.isHost) this.state.hostId = client.sessionId;
+        } else {
+            player.isHost       = isFirstPlayer;
+            player.isReady      = false;
+            player.isEliminated = false;
+            if (isFirstPlayer) this.state.hostId = client.sessionId;
+            if (this.state.status === "game") {
+                player.isSpectator = true;
+                player.isReady     = true;
+            }
         }
 
         this.playerIdMap.set(auth.playerId, client.sessionId);
@@ -258,6 +284,10 @@ export class LobbyRoom extends Room<LobbyState> {
     }
 
     async onLeave(client: Client, code: CloseCode) {
+        if (this.replacedSessions.has(client.sessionId)) {
+            this.replacedSessions.delete(client.sessionId);
+            return;
+        }
         const leaving = this.state.players.get(client.sessionId);
         if (!leaving) return;
         console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} left (code: ${code})`);
