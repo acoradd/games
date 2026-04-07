@@ -15,14 +15,16 @@ export default function JoinRoomForm() {
 
     return (
         <form onSubmit={handleSubmit} className="flex gap-2 w-full">
-            <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Code du lobby"
-                maxLength={12}
-                className="flex-1 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500"
-            />
+            <div className="flex-1">
+                <input
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="Code du lobby"
+                    maxLength={12}
+                    className="w-full bg-gray-800 border border-gray-600 text-white placeholder-gray-500 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500"
+                />
+            </div>
             <button
                 type="submit"
                 disabled={!code.trim()}
