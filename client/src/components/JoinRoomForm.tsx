@@ -19,7 +19,7 @@ export default function JoinRoomForm() {
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="Code de room"
+                placeholder="Code du lobby"
                 maxLength={12}
                 className="flex-1 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500"
             />
