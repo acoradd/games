@@ -231,6 +231,14 @@ export class MotusHandler implements GameHandler {
         }
 
         this.ctx.setState(JSON.stringify(gs));
+
+        // Re-send private guesses on reconnect (VS mode)
+        if (gs.mode === "vs") {
+            const privateGuesses = this.vsGuesses.get(playerId) ?? [];
+            if (privateGuesses.length > 0) {
+                this.ctx.sendTo(playerId, "motus:myGuesses", privateGuesses);
+            }
+        }
     }
 
     onPlayerDisconnect(playerId: string): void {
@@ -293,10 +301,10 @@ export class MotusHandler implements GameHandler {
 
         if (gs.mode === "vs") {
             const privateGuesses = this.vsGuesses.get(playerId) ?? [];
-            privateGuesses.push({ word: normalized, result });
+            privateGuesses.push({guesserId: playerId, word: normalized, result });
             this.vsGuesses.set(playerId, privateGuesses);
 
-            player.guesses.push({ word: "", result });
+            player.guesses.push({ guesserId: playerId, word: "", result });
             if (isSolved) { player.solved = true; player.solvedAt = Date.now(); }
 
             if (this.allConnectedDone(gs)) this.endRound(gs, null);
