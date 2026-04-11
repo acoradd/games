@@ -134,8 +134,9 @@ export interface GenericGameState {
 export type MotusLetterResult = 'correct' | 'misplaced' | 'absent';
 
 export interface MotusGuess {
-    word:   string;
-    result: MotusLetterResult[];
+    word:       string;
+    result:     MotusLetterResult[];
+    guesserId?: string;
 }
 
 export interface MotusPlayerState {
@@ -161,6 +162,7 @@ export interface MotusGameState {
     currentTurnId: string;
 
     playerNames:    Record<string, string>;
+    playerAvatars:  Record<string, { username: string; gravatarUrl: string }>;
     currentRound:   number;
     maxRounds:      number;
     roundPoints:    Record<string, number>;

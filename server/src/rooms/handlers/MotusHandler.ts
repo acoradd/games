@@ -6,8 +6,9 @@ import type { GameHandler, RoomContext, RoundCarryOver } from "./GameHandler.js"
 type MotusLetterResult = "correct" | "misplaced" | "absent";
 
 interface MotusGuess {
-    word:   string;
-    result: MotusLetterResult[];
+    word:      string;
+    result:    MotusLetterResult[];
+    guesserId: string; // stable DB playerId (as string)
 }
 
 interface MotusPlayerState {
@@ -30,6 +31,7 @@ interface MotusGameState {
     sharedGuesses: MotusGuess[];
     currentTurnId: string;
     playerNames:    Record<string, string>;
+    playerAvatars:  Record<string, { username: string; gravatarUrl: string }>; // playerId → {username, gravatarUrl}
     currentRound:   number;
     maxRounds:      number;
     roundPoints:    Record<string, number>;
@@ -70,6 +72,7 @@ export class MotusHandler implements GameHandler {
         const maxRounds    = prevRound?.maxRounds ?? parseInt(String(options["rounds"] ?? "1"), 10);
         const roundPoints: Record<string, number>  = { ...(prevRound?.roundPoints ?? {}) };
         const existingNames: Record<string, string> = prevRound?.playerNames ?? {};
+        const existingAvatars: Record<string, { username: string; gravatarUrl: string }> = prevRound?.playerAvatars ?? {};
 
         const threshold = DIFFICULTY_THRESHOLDS[difficulty] ?? 1;
         const whereClause: Record<string, unknown> = { isGuessable: true, length: { gte: minLen, lte: maxLen } };
@@ -92,10 +95,15 @@ export class MotusHandler implements GameHandler {
             .filter(id => !this.ctx.getPlayers().get(id)?.isEliminated);
 
         const playerNames: Record<string, string> = { ...existingNames };
+        const playerAvatars: Record<string, { username: string; gravatarUrl: string }> = { ...existingAvatars };
         playerIds.forEach(id => {
             this.vsGuesses.set(id, []);
             const p = this.ctx.getPlayers().get(id);
-            if (p) playerNames[id] = p.username;
+            if (p) {
+                playerNames[id] = p.username;
+                const dbId = this.ctx.getPlayerDbId(id);
+                if (dbId) playerAvatars[dbId] = { username: p.username, gravatarUrl: p.gravatarUrl };
+            }
         });
 
         const players: Record<string, MotusPlayerState> = {};
@@ -136,6 +144,7 @@ export class MotusHandler implements GameHandler {
             sharedGuesses:  [],
             currentTurnId:  playerOrder[0] ?? "",
             playerNames,
+            playerAvatars,
             currentRound,
             maxRounds,
             roundPoints,
@@ -243,7 +252,8 @@ export class MotusHandler implements GameHandler {
             this.ctx.sendTo(sessionId, "motus:myGuesses", privateGuesses);
         } else {
             // Coop
-            gs.sharedGuesses.push({ word: normalized, result });
+            const guesserId = this.ctx.getPlayerDbId(sessionId) ?? sessionId;
+            gs.sharedGuesses.push({ word: normalized, result, guesserId });
             if (isSolved) {
                 this.endRound(gs, sessionId);
             } else if (gs.maxAttempts > 0 && gs.sharedGuesses.length >= gs.maxAttempts) {

@@ -121,17 +121,18 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (client.sessionId !== this.state.hostId) return;
             if (this.state.status !== "game") return;
 
-            let gs: { phase?: string; currentRound?: number; maxRounds?: number; roundPoints?: Record<string, number>; playerNames?: Record<string, string>; playerOrder?: string[] };
+            let gs: { phase?: string; currentRound?: number; maxRounds?: number; roundPoints?: Record<string, number>; playerNames?: Record<string, string>; playerAvatars?: Record<string, { username: string; gravatarUrl: string }>; playerOrder?: string[] };
             try { gs = JSON.parse(this.state.gameStateJson) as typeof gs; }
             catch { return; }
             if (gs.phase !== "roundEnd") return;
 
             this.prevRound = {
-                currentRound: (gs.currentRound ?? 1) + 1,
-                maxRounds:    gs.maxRounds ?? 1,
-                roundPoints:  gs.roundPoints ?? {},
-                playerNames:  gs.playerNames ?? {},
-                playerOrder:  gs.playerOrder,
+                currentRound:  (gs.currentRound ?? 1) + 1,
+                maxRounds:     gs.maxRounds ?? 1,
+                roundPoints:   gs.roundPoints ?? {},
+                playerNames:   gs.playerNames ?? {},
+                playerAvatars: gs.playerAvatars,
+                playerOrder:   gs.playerOrder,
             };
 
             this.activeHandler?.dispose();
@@ -393,6 +394,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             broadcastExcept: (exceptSessionId, type, data) => {
                 const except = this.clients.find(cl => cl.sessionId === exceptSessionId);
                 this.broadcast(type, data, except ? { except } : undefined);
+            },
+            getPlayerDbId: (sessionId) => {
+                const id = snapshot[sessionId];
+                return id !== undefined ? String(id) : undefined;
             },
             onGameEnded:  (roundPoints, winners) => {
                 void recordGameSessions(slug, snapshot, roundPoints, winners);

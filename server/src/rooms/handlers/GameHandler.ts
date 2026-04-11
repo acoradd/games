@@ -8,6 +8,7 @@ export interface RoundCarryOver {
     roundPoints: Record<string, number>;
     playerNames: Record<string, string>;
     playerOrder?: string[];
+    playerAvatars?: Record<string, { username: string; gravatarUrl: string }>;
 }
 
 // ── Dependencies injected by LobbyRoom into each handler ─────────────────────
@@ -26,6 +27,8 @@ export interface RoomContext {
     sendTo(sessionId: string, type: string, data?: unknown): void;
     /** Broadcast to all clients except the given sessionId. */
     broadcastExcept(exceptSessionId: string, type: string, data?: unknown): void;
+    /** Returns the stable DB player ID (as string) for a given sessionId. */
+    getPlayerDbId(sessionId: string): string | undefined;
     /** Called by the handler when the game (all rounds) has ended. */
     onGameEnded(roundPoints: Record<string, number>, winners?: string[]): void;
 }

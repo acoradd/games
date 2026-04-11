@@ -1,12 +1,17 @@
-import { useState, useEffect, useRef } from "react";
-import { Type } from "lucide-react";
-import type { Room } from "@colyseus/sdk";
+import type {Room} from '@colyseus/sdk';
+import {Type} from 'lucide-react';
+import {useEffect, useRef, useState} from 'react';
 import type {
-    LobbyPlayer, LobbyState,
-    MotusGameState, MotusGuess, MotusLetterResult,
-    ChatMsg, GenericGameState,
-} from "../../models/Lobby";
-import GameShell from "./GameShell";
+    ChatMsg,
+    GenericGameState,
+    LobbyPlayer,
+    LobbyState,
+    MotusGameState,
+    MotusGuess,
+    MotusLetterResult
+} from '../../models/Lobby';
+import Avatar from '../Avatar';
+import GameShell from './GameShell';
 
 // ── AZERTY layout ─────────────────────────────────────────────────────────────
 
@@ -72,49 +77,65 @@ function LetterCell({
 // ── MotusGrid ─────────────────────────────────────────────────────────────────
 
 function MotusGrid({
-    guesses, wordLength, firstLetter, maxAttempts, typedInput, isActive, shake,
+    guesses, wordLength, firstLetter, maxAttempts, typedInput, isActive, shake, playerInfo,
 }: {
-    guesses:     MotusGuess[];
-    wordLength:  number;
-    firstLetter: string;
-    maxAttempts: number;
-    typedInput:  string;
-    isActive:    boolean;
-    shake:       boolean;
+    guesses:      MotusGuess[];
+    wordLength:   number;
+    firstLetter:  string;
+    maxAttempts:  number;
+    typedInput:   string;
+    isActive:     boolean;
+    shake:        boolean;
+    playerInfo?:  Record<string, { username: string; gravatarUrl: string }>;
 }) {
     const rows       = maxAttempts > 0 ? maxAttempts : Math.max(guesses.length + 1, 6);
     const currentRow = guesses.length;
+    const showAvatars = !!playerInfo;
 
     return (
-        <div className="w-full flex flex-col gap-1" style={{ maxWidth: `min(100%, ${wordLength * 4.25}rem)` }}>
+        <div className="w-full flex flex-col gap-1" style={{ maxWidth: `min(100%, ${wordLength * 4.25 + (showAvatars ? 2.25 : 0)}rem)` }}>
             {Array.from({ length: rows }, (_, rowIdx) => {
                 const guess        = guesses[rowIdx] ?? null;
                 const isCurrentRow = rowIdx === currentRow && isActive;
                 const isShaking    = isCurrentRow && shake;
+                const info         = guess?.guesserId ? playerInfo?.[guess.guesserId] : undefined;
 
                 return (
-                    <div key={rowIdx} className={`flex gap-1 ${isShaking ? "animate-shake" : ""}`}>
-                        {Array.from({ length: wordLength }, (_, colIdx) => {
-                            if (guess) {
-                                return (
-                                    <LetterCell
-                                        key={colIdx}
-                                        letter={guess.word[colIdx] ?? ""}
-                                        result={guess.result[colIdx] ?? null}
+                    <div key={rowIdx} className="flex items-center gap-2">
+                        {showAvatars && (
+                            <div className="w-7 h-7 shrink-0">
+                                {info && (
+                                    <Avatar
+                                        username={info.username}
+                                        gravatarUrl={info.gravatarUrl || null}
+                                        size="sm"
                                     />
-                                );
-                            }
-                            if (colIdx === 0) {
-                                return <LetterCell key={colIdx} letter={firstLetter} locked />;
-                            }
-                            if (!isCurrentRow) {
-                                return <LetterCell key={colIdx} letter="" />;
-                            }
-                            const typedIdx = colIdx - 1;
-                            const letter   = typedInput[typedIdx] ?? "";
-                            const isCursor = typedIdx === typedInput.length && typedInput.length < wordLength - 1;
-                            return <LetterCell key={colIdx} letter={letter} cursor={isCursor} />;
-                        })}
+                                )}
+                            </div>
+                        )}
+                        <div className={`flex flex-auto gap-1 ${isShaking ? "animate-shake" : ""}`}>
+                            {Array.from({ length: wordLength }, (_, colIdx) => {
+                                if (guess) {
+                                    return (
+                                        <LetterCell
+                                            key={colIdx}
+                                            letter={guess.word[colIdx] ?? ""}
+                                            result={guess.result[colIdx] ?? null}
+                                        />
+                                    );
+                                }
+                                if (colIdx === 0) {
+                                    return <LetterCell key={colIdx} letter={firstLetter} locked />;
+                                }
+                                if (!isCurrentRow) {
+                                    return <LetterCell key={colIdx} letter="" />;
+                                }
+                                const typedIdx = colIdx - 1;
+                                const letter   = typedInput[typedIdx] ?? "";
+                                const isCursor = typedIdx === typedInput.length && typedInput.length < wordLength - 1;
+                                return <LetterCell key={colIdx} letter={letter} cursor={isCursor} />;
+                            })}
+                        </div>
                     </div>
                 );
             })}
@@ -466,6 +487,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                     typedInput={canGuess ? typedInput : opponentInput}
                     isActive={canGuess || (mode === "coop" && phase === "playing" && !isSolved && !isEliminated)}
                     shake={shake}
+                    playerInfo={mode === "coop" ? gameState.playerAvatars : undefined}
                 />
 
                 {/* Error message */}
