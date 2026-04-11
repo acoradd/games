@@ -316,6 +316,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (this.activeHandler?.allowsReconnection?.()) {
                 // Game allows reconnection — don't eliminate, let handler manage turn
                 this.activeHandler.onPlayerDisconnect?.(playerIdStr);
+                // Re-elect host if needed (reconnectable or not, host role must stay active)
+                if (leaving.isHost) {
+                    leaving.isHost = false;
+                    const next = [...this.state.players.entries()]
+                        .find(([id, p]) => id !== playerIdStr && p.isConnected);
+                    if (next) {
+                        next[1].isHost    = true;
+                        this.state.hostId = next[0];
+                    }
+                }
             } else {
                 this.eliminatePlayer(playerIdStr);
             }

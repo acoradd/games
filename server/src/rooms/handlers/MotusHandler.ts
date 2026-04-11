@@ -237,13 +237,27 @@ export class MotusHandler implements GameHandler {
         let gs: MotusGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
         catch { return; }
-        if (gs.phase !== "playing" || gs.mode !== "coop") return;
+        if (gs.phase !== "playing") return;
 
-        // Advance turn if it was the disconnected player's turn
-        if (gs.currentTurnId === playerId) {
-            gs.currentTurnId = this.nextCoopPlayer(gs);
-            this.ctx.setState(JSON.stringify(gs));
+        if (gs.mode === "coop") {
+            // Advance turn if it was the disconnected player's turn
+            if (gs.currentTurnId === playerId) {
+                gs.currentTurnId = this.nextCoopPlayer(gs);
+            }
+            // End round if no connected players remain
+            const activeCount = gs.playerOrder.filter(id => {
+                const p  = gs.players[id];
+                const lp = this.ctx.getPlayers().get(id);
+                return p && !p.eliminated && lp && !lp.isEliminated && lp.isConnected;
+            }).length;
+            if (activeCount === 0) this.endRound(gs, null);
+        } else {
+            // VS: end round if all connected players are done
+            const allDone = this.allConnectedDone(gs);
+            if (allDone) this.endRound(gs, null);
         }
+
+        this.ctx.setState(JSON.stringify(gs));
     }
 
     dispose(): void {
@@ -285,12 +299,7 @@ export class MotusHandler implements GameHandler {
             player.guesses.push({ word: "", result });
             if (isSolved) { player.solved = true; player.solvedAt = Date.now(); }
 
-            const allDone = gs.playerOrder.every(id => {
-                const p = gs.players[id];
-                if (!p || p.eliminated) return true;
-                return this.isPlayerDone(gs, id);
-            });
-            if (allDone) this.endRound(gs, null);
+            if (this.allConnectedDone(gs)) this.endRound(gs, null);
 
             this.ctx.setState(JSON.stringify(gs));
             this.ctx.sendTo(playerId, "motus:myGuesses", privateGuesses);
@@ -365,6 +374,17 @@ export class MotusHandler implements GameHandler {
             }
             this.ctx.onGameEnded(gs.roundPoints, winners);
         }
+    }
+
+    /** VS: returns true if every connected, non-eliminated player is done. */
+    private allConnectedDone(gs: MotusGameState): boolean {
+        return gs.playerOrder.every(id => {
+            const p  = gs.players[id];
+            if (!p || p.eliminated) return true;
+            const lp = this.ctx.getPlayers().get(id);
+            if (!lp || !lp.isConnected) return true;   // disconnected → skip
+            return this.isPlayerDone(gs, id);
+        });
     }
 
     private isPlayerDone(gs: MotusGameState, playerId: string): boolean {
