@@ -24,7 +24,7 @@ A self-hosted multiplayer mini-games portal. Create private rooms, invite friend
 | Layer | Technology |
 |-------|-----------|
 | Server | [Colyseus.js](https://colyseus.io) (TypeScript) — authoritative game server |
-| Client | [React 19](https://react.dev) + [Phaser 3](https://phaser.io) + [Tailwind CSS v3](https://tailwindcss.com) + [Vite](https://vite.dev) |
+| Client | [React 19](https://react.dev) + [Tailwind CSS v3](https://tailwindcss.com) + [Vite](https://vite.dev) |
 | Database | PostgreSQL via [Prisma ORM](https://prisma.io) |
 | Auth | Anonymous JWT (no account required) |
 | Realtime | WebSocket via Colyseus SDK |
@@ -35,7 +35,7 @@ A self-hosted multiplayer mini-games portal. Create private rooms, invite friend
 
 ### Prerequisites
 
-- Node.js >= 24
+- Node.js >= 20.9.0
 - PostgreSQL 16
 
 ### Local development
@@ -129,10 +129,10 @@ accoradd-games/
 │   │   └── routes/          # REST API
 │   ├── prisma/              # Schema + migrations + seed
 │   └── test/                # Mocha + @colyseus/testing
-├── client/                  # React + Phaser + Tailwind
+├── client/                  # React + Tailwind
 │   ├── src/
 │   │   ├── components/games/ # One component per game
-│   │   ├── pages/            # HomePage, LobbyPage, GamePage
+│   │   ├── pages/            # HomePage, AuthPage, LobbyPage, GamePage, …
 │   │   ├── services/         # API calls
 │   │   └── webservices/      # axios, Colyseus client, env
 │   └── public/

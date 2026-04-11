@@ -89,13 +89,20 @@ npm run build
 - `OpenLexicon.tsv` — French lexicon source file (~190k entries, stays in the repo but not embedded in the Docker image)
 
 **Room architecture** (`server/src/rooms/`):
-- Currently one `LobbyRoom` handles all game modes via a generic JSON state field
+- One `LobbyRoom` handles all game modes; game-specific logic is delegated to a `GameHandler` instance
 - `LobbyState` schema (`schema/LobbyState.ts`): `hostId`, `isStarted`, `status`, `selectedGameSlug`, `gameOptionsJson`, `gameStateJson`, `players` (MapSchema), `chatHistory` (ArraySchema)
-- `LobbyPlayer` schema fields: `id`, `username`, `isHost`, `isReady`, `isConnected`, `isEliminated`
-- Game-specific logic lives entirely in `gameStateJson: string` (parsed/mutated/re-serialized on each action)
-- `onAuth` verifies JWT token and blocks duplicate connections via `playerIdMap: Map<playerId, sessionId>`
-- `async onLeave`: unexpected disconnect → `allowReconnection(client, 30)` → timeout → `eliminatePlayer`; consented leave during game → `eliminatePlayer`; lobby → `removePlayer`
-- Message handlers: `ready`, `selectGame`, `setOptions`, `chat`, `start`, `flipCard`, `returnToLobby`, `nextRound`, `motus:guess`
+- `LobbyPlayer` schema fields: `id`, `sessionId`, `username`, `gravatarUrl`, `isHost`, `isReady`, `isConnected`, `isEliminated`, `isSpectator`
+- Game-specific logic lives in `gameStateJson: string` (parsed/mutated/re-serialized) AND in dedicated handlers
+- `onAuth` verifies JWT token and blocks duplicate connections via `playerIdMap: Map<playerId, sessionId>`; the previous session is kicked with `session_replaced` if a duplicate connects
+- `async onLeave`: if handler `allowsReconnection()` → hold slot, call `onPlayerDisconnect`; consented leave or no reconnection → `eliminatePlayer`; lobby → `removePlayer`
+- Players joining a game in progress become **spectators** (`isSpectator = true`) unless they are reconnecting after a disconnect
+- Message handlers: `ready`, `selectGame`, `setOptions`, `chat`, `kick`, `start`, `forfeit`, `returnToLobby`, `forceReturnToLobby`, `nextRound` + any handler-specific messages (routed to `activeHandler.onMessage`)
+
+**GameHandler pattern** (`server/src/rooms/handlers/`):
+- `GameHandler.ts` — abstract interface: `init()`, `onMessage()`, `dispose()`, optional `allowsReconnection()`, `onPlayerJoin()`, `onPlayerDisconnect()`
+- `MemoryHandler.ts`, `MotusHandler.ts`, `TronHandler.ts`, `BombermanHandler.ts` — concrete implementations
+- `LobbyRoom` instantiates the right handler on `start` via `createHandler(slug)`, delegates all game messages to it
+- `allowsReconnection()` controls whether a disconnected player keeps their slot (currently `true` only for Motus)
 
 **State synchronization:** `@colyseus/schema` decorators (`@type(...)`) mark fields for automatic delta sync to all clients.
 
@@ -113,21 +120,28 @@ npm run build
 - `webservices/colyseus.ts` — Colyseus client singleton
 - `webservices/currentLobbyRoom.ts` — in-memory store for the active Room object (cross-page hand-off)
 - `services/` — API calls (gameModeService, playerService, lobbyService)
-- `components/` — Reusable UI (GameCard, JoinRoomForm, UsernameModal) + `components/games/` (MemoryGame, TronGame, BombermanGame, MotusGame)
-- `pages/` — HomePage, LobbyPage, GamePage
+- `components/` — Reusable UI (Avatar, GameCard, JoinRoomForm, LobbyRoom, UsernameModal) + `components/games/` (MemoryGame, TronGame, BombermanGame, MotusGame)
+- `pages/` — HomePage, AuthPage, ProfilePage, SettingsPage, CreateLobbyPage, LobbyPage, JoinLobbyPage, GamePage + legal pages (MentionsLegalesPage, ConfidentialitePage, CguPage)
 - `App.tsx` — BrowserRouter + Routes
 
 **Routes:**
 | Path | Page |
 |------|------|
 | `/` | HomePage |
-| `/lobby/new` | LobbyPage (creates room) |
+| `/auth` | AuthPage (login / register) |
+| `/profile` | ProfilePage |
+| `/settings` | SettingsPage |
+| `/lobby/new` | CreateLobbyPage (creates room) |
 | `/lobby/:roomId` | LobbyPage (joins room) |
+| `/join/:roomCode` | JoinLobbyPage (join by room code) |
 | `/game/:slug/play/:roomId` | GamePage |
+| `/mentions-legales` | MentionsLegalesPage |
+| `/confidentialite` | ConfidentialitePage |
+| `/cgu` | CguPage |
 
 **Auth:** Anonymous mode — POST `/api/players/anonymous` → `{ player, token }` stored in `localStorage` under key `"player"`. The JWT `token` is also passed as an option when joining a Colyseus room (`joinById` / `create`) so `onAuth` can verify identity and block duplicates.
 
-**Unauthenticated access:** `LobbyPage` and `GamePage` redirect to `"/"` with `{ state: { returnTo: location.pathname } }` if no stored player. `HomePage` navigates back to `returnTo` after successful login.
+**Unauthenticated access:** `LobbyPage` and `GamePage` redirect to `"/auth"` with `{ state: { returnTo: location.pathname } }` if no stored player. `AuthPage` navigates back to `returnTo` after successful login.
 
 ## Lobby → Game Navigation
 
@@ -139,11 +153,10 @@ npm run build
 
 ## GamePage Reconnection
 
-- `room.reconnectionToken` persisted in `localStorage` (key: `reconnect_${roomId}`) so it survives page close
-- `room.onLeave` (code ≠ 4000/1000) → `setReconnecting(true)` → `attemptReconnect(token)` (3 attempts × 3s)
-- On success: re-bind handlers, re-open BroadcastChannel, clear reconnecting overlay
-- On failure: `clearToken`, `navigate("/")`
-- **Multi-tab protection:** before attempting `reconnect(token)`, broadcasts "check" via `BroadcastChannel`. If another tab responds "active" within 200ms, skip reconnect and go to `joinLobby` (blocked server-side by 409 if already connected)
+- If `getCurrentRoom(roomId)` returns a room (Lobby→Game navigation), GamePage reuses it directly — no reconnect needed
+- Otherwise, GamePage calls `joinLobby(roomId)` — server `onAuth` checks `playerIdMap` to detect session replacement and kicks the old session with `kicked` event (code `session_replaced`)
+- Players reconnecting while a game allows reconnection (`allowsReconnection()`) are restored as active; if they were voluntarily eliminated (forfeit), they rejoin as spectators
+- `room.onLeave` → `navigate("/")` unless `returningToLobbyRef.current` is set (lobby return in progress)
 
 ## Game State Pattern (Generic JSON)
 
