@@ -205,6 +205,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             "bomberman:bomb",
             "motus:guess",
             "motus:typing",
+            "motus:requestGuesses",
             "forceEndRound",
         ];
         for (const type of gameMsgs) {

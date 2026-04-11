@@ -297,6 +297,11 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         room.onMessage("motus:typing", ({ input }: { input: string }) => {
             setOpponentInput(input);
         });
+        // Request private guesses in case we reconnected mid-game
+        if (mode === "vs" && phase === "playing") {
+            room.send("motus:requestGuesses");
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [room]);
 
     useEffect(() => {

@@ -178,6 +178,8 @@ export class MotusHandler implements GameHandler {
             await this.handleGuess(playerId, (data as { word?: string }).word ?? "");
         } else if (type === "motus:typing") {
             this.handleTyping(playerId, (data as { input?: string }).input ?? "");
+        } else if (type === "motus:requestGuesses") {
+            this.handleRequestGuesses(playerId);
         } else if (type === "forceEndRound") {
             this.handleForceEndRound(playerId);
         }
@@ -231,14 +233,6 @@ export class MotusHandler implements GameHandler {
         }
 
         this.ctx.setState(JSON.stringify(gs));
-
-        // Re-send private guesses on reconnect (VS mode)
-        if (gs.mode === "vs") {
-            const privateGuesses = this.vsGuesses.get(playerId) ?? [];
-            if (privateGuesses.length > 0) {
-                this.ctx.sendTo(playerId, "motus:myGuesses", privateGuesses);
-            }
-        }
     }
 
     onPlayerDisconnect(playerId: string): void {
@@ -332,6 +326,17 @@ export class MotusHandler implements GameHandler {
         if (gs.phase !== "playing" || gs.mode !== "coop") return;
         if (gs.currentTurnId !== playerId) return;
         this.ctx.broadcastExcept(playerId, "motus:typing", { input });
+    }
+
+    private handleRequestGuesses(playerId: string): void {
+        let gs: MotusGameState;
+        try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
+        catch { return; }
+        if (gs.mode !== "vs") return;
+        const privateGuesses = this.vsGuesses.get(playerId) ?? [];
+        if (privateGuesses.length > 0) {
+            this.ctx.sendTo(playerId, "motus:myGuesses", privateGuesses);
+        }
     }
 
     private handleForceEndRound(_playerId: string): void {
