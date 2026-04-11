@@ -128,18 +128,20 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (!this.isHost(client.sessionId)) return;
             if (this.state.status !== "game") return;
 
-            let gs: { phase?: string; currentRound?: number; maxRounds?: number; roundPoints?: Record<string, number>; playerNames?: Record<string, string>; playerAvatars?: Record<string, { username: string; gravatarUrl: string }>; playerOrder?: string[] };
+            let gs: { phase?: string; currentRound?: number; maxRounds?: number; roundPoints?: Record<string, number>; playerNames?: Record<string, string>; playerAvatars?: Record<string, { username: string; gravatarUrl: string }>; playerOrder?: string[]; roundWinnerIds?: string[]; currentTurnId?: string };
             try { gs = JSON.parse(this.state.gameStateJson) as typeof gs; }
             catch { return; }
             if (gs.phase !== "roundEnd") return;
 
             this.prevRound = {
-                currentRound:  (gs.currentRound ?? 1) + 1,
-                maxRounds:     gs.maxRounds ?? 1,
-                roundPoints:   gs.roundPoints ?? {},
-                playerNames:   gs.playerNames ?? {},
-                playerAvatars: gs.playerAvatars,
-                playerOrder:   gs.playerOrder,
+                currentRound:    (gs.currentRound ?? 1) + 1,
+                maxRounds:       gs.maxRounds ?? 1,
+                roundPoints:     gs.roundPoints ?? {},
+                playerNames:     gs.playerNames ?? {},
+                playerAvatars:   gs.playerAvatars,
+                playerOrder:     gs.playerOrder,
+                roundWinnerIds:  gs.roundWinnerIds ?? [],
+                lastTurnPlayerId: gs.currentTurnId,
             };
 
             this.activeHandler?.dispose();
@@ -239,6 +241,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const playerIdStr = String(auth.playerId);
         const existing    = this.state.players.get(playerIdStr);
 
+        const reconnectionAllowed = this.activeHandler?.allowsReconnection?.() ?? false;
+
         if (existing) {
             // Returning player — update session and connection status
             const oldSession = existing.sessionId;
@@ -248,6 +252,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             existing.isConnected = true;
             existing.username    = auth.username.trim().slice(0, 32);
             existing.gravatarUrl = auth.gravatarUrl;
+
+            // If the game allows reconnection, restore active status
+            if (this.state.isStarted && reconnectionAllowed) {
+                existing.isEliminated = false;
+                existing.isSpectator  = false;
+                this.activeHandler?.onPlayerJoin?.(playerIdStr);
+            }
 
             // Kick old session if still alive
             const oldClient = this.clients.find(c => c.sessionId === oldSession);
@@ -269,10 +280,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             player.isHost      = isFirst;
             player.isReady     = false;
             player.isEliminated = false;
-            player.isSpectator  = this.state.status === "game";
+            // Spectator only if game is running AND the game doesn't allow mid-game joins
+            player.isSpectator  = this.state.status === "game" && !reconnectionAllowed;
             if (this.state.status === "game") player.isReady = true;
             if (isFirst) this.state.hostId = playerIdStr;
             this.state.players.set(playerIdStr, player);
+
+            // Notify handler of new participant
+            if (this.state.isStarted && reconnectionAllowed) {
+                this.activeHandler?.onPlayerJoin?.(playerIdStr);
+            }
         }
 
         this.playerIdMap.set(auth.playerId, client.sessionId);
@@ -296,8 +313,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         console.log(`[LobbyRoom ${this.roomId}] ${leaving.username} left (code: ${code})`);
 
         if (this.state.isStarted && !leaving.isSpectator) {
-            // During a game: immediate elimination, no reconnection window
-            this.eliminatePlayer(playerIdStr);
+            if (this.activeHandler?.allowsReconnection?.()) {
+                // Game allows reconnection — don't eliminate, let handler manage turn
+                this.activeHandler.onPlayerDisconnect?.(playerIdStr);
+            } else {
+                this.eliminatePlayer(playerIdStr);
+            }
         } else if (!this.state.isStarted) {
             // In lobby: remove from roster
             this.removePlayer(playerIdStr, leaving);

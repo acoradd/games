@@ -38,7 +38,7 @@ export default function GameShell({
     const {
         phase, playerOrder, playerNames, roundPoints, roundWinnerIds,
         currentRound, maxRounds, activePlayerIds = [], playerData = {},
-        roundWinnerSubtitle,
+        roundWinnerSubtitle, preserveOrder = false,
     } = genericState;
 
     const isHost         = players.find((p) => p.id === sessionId)?.isHost ?? false;
@@ -84,9 +84,9 @@ export default function GameShell({
     }
 
     // ── Generic scoreboard ────────────────────────────────────────────────────
-    const rankedByPoints = [...playerOrder].sort(
-        (a, b) => (roundPoints[b] ?? 0) - (roundPoints[a] ?? 0)
-    );
+    const rankedByPoints = preserveOrder
+        ? [...playerOrder]
+        : [...playerOrder].sort((a, b) => (roundPoints[b] ?? 0) - (roundPoints[a] ?? 0));
     const multiRound = maxRounds > 1;
 
     const scoreboard = (

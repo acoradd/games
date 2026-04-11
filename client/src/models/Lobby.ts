@@ -128,6 +128,8 @@ export interface GenericGameState {
     playerData?: Record<string, GenericPlayerData>;
     /** Optional subtitle shown under the winner name in the round-end overlay. */
     roundWinnerSubtitle?: string;
+    /** If true, players are displayed in playerOrder order instead of sorted by points. */
+    preserveOrder?: boolean;
 }
 
 // ── Motus ──────────────────────────────────────────────────────────────────

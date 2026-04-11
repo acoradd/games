@@ -339,7 +339,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
 
     // ── Derived data ───────────────────────────────────────────────────────
     const letterStates   = computeLetterStates(myGuesses);
-    const participantIds = Object.keys(playerNames ?? {});
+    const participantIds = gameState.playerOrder ?? Object.keys(playerNames ?? {});
     const isMyCoopTurn   = mode === "coop" && sessionId === currentTurnId;
     const currentTurnName = playerNames[currentTurnId] ?? "";
 
@@ -362,6 +362,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             }])
         ),
         roundWinnerSubtitle: (roundWinnerIds ?? []).length === 1 ? "a trouvé !" : undefined,
+        preserveOrder: mode === "coop",
     };
 
     // ── Scoreboard footer (VS guess dots + coop force-end) ─────────────────

@@ -1,5 +1,5 @@
-import { prisma } from "../../lib/prisma.js";
-import type { GameHandler, RoomContext, RoundCarryOver } from "./GameHandler.js";
+import {prisma} from '../../lib/prisma.js';
+import type {GameHandler, RoomContext, RoundCarryOver} from './GameHandler.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -115,10 +115,17 @@ export class MotusHandler implements GameHandler {
         if (mode === "coop") {
             const prevOrder = prevRound?.playerOrder;
             if (prevOrder && prevOrder.length > 0) {
-                const active = prevOrder.filter(id => playerIds.includes(id));
-                playerOrder  = [...active.slice(1), active[0]!];
-                playerIds.filter(id => !active.includes(id)).forEach(id => playerOrder.push(id));
+                // Keep players that are still active; append any newcomers at the end
+                const active    = prevOrder.filter(id => playerIds.includes(id));
+                const newcomers = playerIds.filter(id => !active.includes(id));
+
+                // Rotate from the player after the last one who played
+                const lastPlayer = prevRound?.lastTurnPlayerId;
+                const lastIdx    = lastPlayer ? active.indexOf(lastPlayer) : -1;
+                const startIdx   = lastIdx >= 0 ? (lastIdx + 1) % active.length : 1;
+                playerOrder = [...active.slice(startIdx), ...active.slice(0, startIdx), ...newcomers];
             } else {
+                // First round: shuffle once
                 playerOrder = [...playerIds];
                 for (let i = playerOrder.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -201,6 +208,44 @@ export class MotusHandler implements GameHandler {
         this.ctx.setState(JSON.stringify(gs));
     }
 
+    allowsReconnection(): boolean { return true; }
+
+    onPlayerJoin(playerId: string): void {
+        let gs: MotusGameState;
+        try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
+        catch { return; }
+        if (gs.phase === "ended") return;
+
+        const lp = this.ctx.getPlayers().get(playerId);
+        if (!lp) return;
+
+        // Update name/avatar snapshot
+        gs.playerNames[playerId] = lp.username;
+        gs.playerAvatars[playerId] = { username: lp.username, gravatarUrl: lp.gravatarUrl };
+
+        // Add to game state if brand new
+        if (!gs.players[playerId]) {
+            gs.players[playerId] = { guesses: [], solved: false, solvedAt: 0, eliminated: false };
+            gs.playerOrder.push(playerId);
+            this.vsGuesses.set(playerId, []);
+        }
+
+        this.ctx.setState(JSON.stringify(gs));
+    }
+
+    onPlayerDisconnect(playerId: string): void {
+        let gs: MotusGameState;
+        try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
+        catch { return; }
+        if (gs.phase !== "playing" || gs.mode !== "coop") return;
+
+        // Advance turn if it was the disconnected player's turn
+        if (gs.currentTurnId === playerId) {
+            gs.currentTurnId = this.nextCoopPlayer(gs);
+            this.ctx.setState(JSON.stringify(gs));
+        }
+    }
+
     dispose(): void {
         this.roundTimer?.clear();
         this.roundTimer = null;
@@ -253,7 +298,7 @@ export class MotusHandler implements GameHandler {
             // Coop
             gs.sharedGuesses.push({ word: normalized, result, guesserId: playerId });
             if (isSolved) {
-                this.endRound(gs, sessionId);
+                this.endRound(gs, playerId);
             } else if (gs.maxAttempts > 0 && gs.sharedGuesses.length >= gs.maxAttempts) {
                 this.endRound(gs, null);
             } else {
@@ -339,7 +384,7 @@ export class MotusHandler implements GameHandler {
         const active = gs.playerOrder.filter(id => {
             const p  = gs.players[id];
             const lp = this.ctx.getPlayers().get(id);
-            return p && !p.eliminated && lp && !lp.isEliminated;
+            return p && !p.eliminated && lp && !lp.isEliminated && lp.isConnected;
         });
         if (active.length === 0) return gs.currentTurnId;
         const idx = active.indexOf(gs.currentTurnId);

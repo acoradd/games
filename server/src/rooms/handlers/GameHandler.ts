@@ -9,6 +9,8 @@ export interface RoundCarryOver {
     playerNames: Record<string, string>;
     playerOrder?: string[];
     playerAvatars?: Record<string, { username: string; gravatarUrl: string }>;
+    roundWinnerIds?: string[];
+    lastTurnPlayerId?: string;
 }
 
 // ── Dependencies injected by LobbyRoom into each handler ─────────────────────
@@ -52,6 +54,26 @@ export interface GameHandler {
      * The handler should update the game state accordingly (skip turn, check end, etc.)
      */
     onEliminate(playerId: string): void;
+
+    /**
+     * If true, disconnecting during a game does NOT immediately eliminate the player.
+     * The player stays in the roster with isConnected=false and can reconnect.
+     * New players joining mid-game are added as active participants, not spectators.
+     */
+    allowsReconnection?(): boolean;
+
+    /**
+     * Called when a player (re)joins during an ongoing game (only when allowsReconnection=true).
+     * The handler should add them to the game state if not already present,
+     * or restore their active status if they were previously disconnected.
+     */
+    onPlayerJoin?(playerId: string): void;
+
+    /**
+     * Called when a player disconnects during a game that allows reconnection.
+     * The handler should advance turns / update state as needed.
+     */
+    onPlayerDisconnect?(playerId: string): void;
 
     /**
      * Clean up all timers and intervals.
