@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, ChatMsg, GenericGameState } from "../../models/Lobby";
 import Avatar from "../Avatar";
-import { X, Send } from "lucide-react";
+import { X, Send, Play, Eye, Trophy, WifiOff } from "lucide-react";
 
 interface Props {
     room: Room<LobbyState>;
@@ -124,11 +124,11 @@ export default function GameShell({
                                     )}
                                 </div>
                                 <span className="flex items-center gap-1 truncate min-w-0">
-                                    {isActive && !isElim && <span className="text-violet-400 shrink-0">▶</span>}
-                                    {!isConn && !isElim && <span title="Reconnexion…" className="shrink-0">🔴</span>}
+                                    {isActive && !isElim && <Play className="w-3 h-3 text-violet-400 shrink-0 fill-violet-400" />}
+                                    {!isConn && !isElim && <WifiOff className="w-3 h-3 text-red-500 shrink-0" title="Reconnexion…" />}
                                     <span className="truncate">{name}</span>
                                     {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
-                                    {isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">✕</span>}
+                                    {isElim && <X className="w-3 h-3 text-gray-600 ml-1 shrink-0" />}
                                     {isAlive === false && !isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">mort</span>}
                                     {!isConn && !isElim && <span className="text-gray-500 text-xs ml-1 shrink-0">(reconnexion…)</span>}
                                 </span>
@@ -156,7 +156,7 @@ export default function GameShell({
             </ul>
             {spectatorCount > 0 && (
                 <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
-                    <span>👁</span>
+                    <Eye className="w-3 h-3" />
                     <span>{spectatorCount} spectateur{spectatorCount > 1 ? "s" : ""}</span>
                 </p>
             )}
@@ -309,7 +309,7 @@ export default function GameShell({
                         {overlayTopContent}
                         {winnerName ? (
                             <>
-                                <p className="text-indigo-400 font-semibold">🏆 {winnerName}</p>
+                                <p className="text-indigo-400 font-semibold flex items-center justify-center gap-2"><Trophy className="w-4 h-4" /> {winnerName}</p>
                                 {roundWinnerSubtitle && (
                                     <p className="text-gray-500 text-xs mb-4">{roundWinnerSubtitle}</p>
                                 )}

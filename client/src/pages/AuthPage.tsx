@@ -104,8 +104,10 @@ export default function AuthPage() {
 
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-sm text-gray-400">Pseudo</label>
+                            <label htmlFor="username" className="text-sm text-gray-400">Pseudo</label>
                             <input
+                                id="username"
+                                name="username"
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
@@ -113,31 +115,38 @@ export default function AuthPage() {
                                 maxLength={32}
                                 required
                                 autoFocus
+                                autoComplete="username"
                                 className="bg-gray-900 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
                             />
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-sm text-gray-400">Mot de passe</label>
+                            <label htmlFor="password" className="text-sm text-gray-400">Mot de passe</label>
                             <input
+                                id="password"
+                                name="password"
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
                                 required
+                                autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                                 className="bg-gray-900 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
                             />
                         </div>
 
                         {tab === 'register' && (
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm text-gray-400">Confirmer le mot de passe</label>
+                                <label htmlFor="password-confirm" className="text-sm text-gray-400">Confirmer le mot de passe</label>
                                 <input
+                                    id="password-confirm"
+                                    name="password-confirm"
                                     type="password"
                                     value={passwordConfirm}
                                     onChange={(e) => setPasswordConfirm(e.target.value)}
                                     placeholder="••••••••"
                                     required
+                                    autoComplete="new-password"
                                     className="bg-gray-900 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
                                 />
                             </div>
