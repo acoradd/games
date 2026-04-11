@@ -284,6 +284,7 @@ export default function GameShell({
                                 onChange={(e) => setChatInput(e.target.value)}
                                 placeholder="Message…"
                                 maxLength={200}
+                                autoComplete="off"
                                 className="flex-1 min-w-0 bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
                             />
                             <button

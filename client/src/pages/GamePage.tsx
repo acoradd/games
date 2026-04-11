@@ -87,13 +87,13 @@ export default function GamePage() {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
                     list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
                                 isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                                isSpectator: p.isSpectator ?? false })
+                                isSpectator: p.isSpectator ?? false, gravatarUrl: p.gravatarUrl ?? '' })
                 );
             } else {
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
                     list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
                                 isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                                isSpectator: p.isSpectator ?? false })
+                                isSpectator: p.isSpectator ?? false, gravatarUrl: p.gravatarUrl ?? '' })
                 );
             }
         }
