@@ -157,15 +157,15 @@ function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }:
         const s = letterStates[letter];
         if (s === "correct")   return "bg-green-600 border-green-500 text-white";
         if (s === "misplaced") return "bg-amber-500 border-amber-400 text-white";
-        if (s === "absent")    return "bg-gray-600 border-gray-500 text-gray-400";
-        return "bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 active:bg-gray-500";
+        if (s === "absent")    return "bg-gray-900 border-gray-800 text-gray-600";
+        return "bg-gray-700 border-gray-500 text-white hover:bg-gray-600 active:bg-gray-500";
     }
 
     const keyFont: React.CSSProperties = { fontSize: "clamp(0.8rem, 2.8vw, 1.1rem)" };
 
     return (
         <div
-            className={`w-full flex flex-col gap-1 select-none ${disabled ? "opacity-30 pointer-events-none" : ""}`}
+            className={`w-full flex flex-col gap-1 select-none ${disabled ? "opacity-65 pointer-events-none" : ""}`}
             style={{ maxWidth: "min(100%, 38rem)" }}
         >
             {AZERTY_ROWS.map((row, ri) => (
