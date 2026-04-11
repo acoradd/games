@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, ChatMsg, GenericGameState } from "../../models/Lobby";
 import Avatar from "../Avatar";
-import { X, Send, Play, Eye, Trophy, WifiOff } from "lucide-react";
+import { X, Send, Play, Eye, Trophy, WifiOff, Crown } from "lucide-react";
 
 interface Props {
     room: Room<LobbyState>;
@@ -109,6 +109,8 @@ export default function GameShell({
                     const roundScore = data?.roundScore;
                     const scoreUnit  = data?.roundScoreUnit;
 
+                    const isHost = lp?.isHost ?? false;
+
                     return (
                         <li key={id} className={`flex items-center justify-between gap-2 text-sm ${
                             isElim ? "text-gray-600" : isActive ? "text-violet-300" : "text-gray-200"
@@ -116,21 +118,29 @@ export default function GameShell({
                             <span className={`truncate flex items-center gap-2 min-w-0 ${isElim ? "line-through" : ""}`}>
                                 <div className="relative shrink-0">
                                     <Avatar username={name} gravatarUrl={lp?.gravatarUrl || null} size="sm" />
-                                    {color && (
+                                    {/* game color or connection dot at bottom-right */}
+                                    {color ? (
                                         <span
                                             className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950"
-                                            style={{ backgroundColor: color }}
+                                            style={{ backgroundColor: color, opacity: isConn ? 1 : 0.4 }}
                                         />
+                                    ) : (
+                                        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${isConn ? "bg-emerald-400" : "bg-gray-600"}`} />
+                                    )}
+                                    {/* host crown at top-left */}
+                                    {isHost && (
+                                        <span className="absolute -top-1 -left-1 bg-gray-950 rounded-full p-0.5">
+                                            <Crown className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                        </span>
                                     )}
                                 </div>
                                 <span className="flex items-center gap-1 truncate min-w-0">
                                     {isActive && !isElim && <Play className="w-3 h-3 text-violet-400 shrink-0 fill-violet-400" />}
-                                    {!isConn && !isElim && <WifiOff className="w-3 h-3 text-red-500 shrink-0" title="Déconnecté" />}
+                                    {!isConn && <WifiOff className="w-3 h-3 text-red-500 shrink-0" title="Déconnecté" />}
                                     <span className="truncate">{name}</span>
                                     {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
                                     {isElim && <X className="w-3 h-3 text-gray-600 ml-1 shrink-0" />}
                                     {isAlive === false && !isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">mort</span>}
-                                    {!isConn && !isElim && <span className="text-gray-500 text-xs ml-1 shrink-0">(déconnecté)</span>}
                                 </span>
                             </span>
                             <span className="shrink-0 font-bold text-indigo-400 tabular-nums">

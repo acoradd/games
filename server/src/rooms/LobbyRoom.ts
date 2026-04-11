@@ -160,10 +160,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.activeHandler = null;
             this.prevRound = null;
 
-            // Remove eliminated, disconnected, or spectator players from roster
+            // Remove only truly disconnected players — connected spectators/eliminated stay
             const toRemove: string[] = [];
             this.state.players.forEach((p, playerIdStr) => {
-                if (p.isEliminated || !p.isConnected || p.isSpectator) toRemove.push(playerIdStr);
+                if (!p.isConnected) toRemove.push(playerIdStr);
             });
             for (const playerIdStr of toRemove) {
                 const numericId = parseInt(playerIdStr, 10);
@@ -173,22 +173,24 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 this.state.players.delete(playerIdStr);
             }
 
-            // Re-elect host if needed
-            if (this.state.players.size > 0 && !this.state.players.has(this.state.hostId)) {
-                const nextEntry = this.state.players.entries().next().value as [string, LobbyPlayer] | undefined;
-                if (nextEntry) {
-                    const [nextId, nextPlayer] = nextEntry;
-                    nextPlayer.isHost = true;
-                    this.state.hostId = nextId;
-                }
+            // Reset all remaining connected players to a clean lobby state
+            this.state.players.forEach((p) => {
+                p.isReady      = false;
+                p.isEliminated = false;
+                p.isSpectator  = false;
+                p.isHost       = false;
+            });
+
+            // Elect host
+            const firstEntry = this.state.players.entries().next().value as [string, LobbyPlayer] | undefined;
+            if (firstEntry) {
+                firstEntry[1].isHost = true;
+                this.state.hostId    = firstEntry[0];
             }
 
             this.state.isStarted = false;
             this.state.status    = "lobby";
             this.state.gameStateJson = "{}";
-            this.state.players.forEach((p) => {
-                p.isReady = false; p.isEliminated = false; p.isConnected = true;
-            });
             this.broadcast("lobby:return", { roomId: this.roomId });
             console.log(`[LobbyRoom ${this.roomId}] host returned everyone to lobby (removed ${toRemove.length} ghost players)`);
         });

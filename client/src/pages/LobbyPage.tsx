@@ -1,6 +1,6 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Clipboard, Check, Link, Send, X, WifiOff, Plus, Loader2} from 'lucide-react';
+import {Clipboard, Check, Link, Send, X, WifiOff, Plus, Loader2, Crown} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
@@ -533,6 +533,11 @@ export default function LobbyPage() {
                                         <div className="relative shrink-0">
                                             <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
                                             <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${p.isReady ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                                            {p.isHost && (
+                                                <span className="absolute -top-1 -left-1 bg-gray-950 rounded-full p-0.5">
+                                                    <Crown className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                                </span>
+                                            )}
                                         </div>
                                         <span className="text-sm font-medium truncate">
                                             {p.username}
@@ -542,9 +547,6 @@ export default function LobbyPage() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                        {p.isHost && (
-                                            <span className="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">host</span>
-                                        )}
                                         <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
                                             {p.isReady ? 'prêt' : 'attente'}
                                         </span>
