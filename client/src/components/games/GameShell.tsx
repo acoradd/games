@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, ChatMsg, GenericGameState } from "../../models/Lobby";
 import Avatar from "../Avatar";
-import { X, Send, Play, Eye, Trophy, WifiOff, Crown } from "lucide-react";
+import { X, Send, Play, Eye, Trophy, WifiOff, Crown, LogOut, SkipForward } from "lucide-react";
 
 interface Props {
     room: Room<LobbyState>;
@@ -23,10 +23,16 @@ interface Props {
     containerRef?: React.RefObject<HTMLDivElement | null>;
     /** Called when the mobile tab changes */
     onTabChange?: (tab: "jeu" | "scores" | "chat") => void;
-    /** Extra content shown below the player list in the sidebar (e.g. Motus VS guess display) */
-    scoreboardFooter?: React.ReactNode;
+    /**
+     * Extra content shown below the player list in the sidebar.
+     * Can be a plain ReactNode or a render-prop receiving `openConfirm` to
+     * trigger the shared confirmation popup.
+     */
+    scoreboardFooter?: React.ReactNode | ((openConfirm: (label: string, action: () => void) => void) => React.ReactNode);
     /** Extra content shown at the top of round-end and end overlays (e.g. Motus secret word) */
     overlayTopContent?: React.ReactNode;
+    /** Whether to show the forfeit button for the local player (default true) */
+    canForfeit?: boolean;
 }
 
 export default function GameShell({
@@ -34,6 +40,7 @@ export default function GameShell({
     genericState, players, sessionId,
     header, children, gameScrollable = false,
     containerRef, onTabChange, scoreboardFooter, overlayTopContent,
+    canForfeit = true,
 }: Props) {
     const {
         phase, playerOrder, playerNames, roundPoints, roundWinnerIds,
@@ -45,13 +52,22 @@ export default function GameShell({
     const spectatorCount = players.filter((p) => p.isSpectator).length;
     const playerById     = new Map(players.map((p) => [p.id, p]));
 
-    const [mobileTab, setMobileTab] = useState<"jeu" | "scores" | "chat">("jeu");
-    const [chatInput, setChatInput]  = useState("");
+    const myPlayer      = players.find((p) => p.id === sessionId);
+    const myIsElim      = myPlayer?.isEliminated ?? false;
+    const myIsSpectator = myPlayer?.isSpectator  ?? false;
+    const showForfeit   = canForfeit && phase === "playing" && !myIsElim && !myIsSpectator;
+    const showForceEnd  = isHost && (phase === "playing" || phase === "roundEnd");
+
+    const [mobileTab,  setMobileTab]  = useState<"jeu" | "scores" | "chat">("jeu");
+    const [chatInput,  setChatInput]  = useState("");
+    const [confirm,    setConfirm]    = useState<null | { label: string; action: () => void }>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
+
+    useEffect(() => { setConfirm(null); }, [phase]);
 
     // Keep the screen awake while in the game
     useEffect(() => {
@@ -244,7 +260,33 @@ export default function GameShell({
 
                     <div className={`${mobileTab === "chat" ? "hidden lg:block" : ""} p-4 border-b border-gray-800 shrink-0`}>
                         {scoreboard}
-                        {scoreboardFooter}
+                        {typeof scoreboardFooter === "function"
+                            ? scoreboardFooter((label, action) => setConfirm({ label, action }))
+                            : scoreboardFooter}
+
+                        {/* Forfeit / force-end buttons */}
+                        {(showForfeit || showForceEnd) && (
+                            <div className="mt-3 border-t border-gray-800 pt-3 flex flex-col gap-2">
+                                {showForfeit && (
+                                    <button
+                                        onClick={() => setConfirm({ label: "Déclarer forfait ?", action: () => room.send("forfeit") })}
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/60 rounded-lg py-1.5 transition-colors"
+                                    >
+                                        <LogOut className="w-3 h-3" />
+                                        Déclarer forfait
+                                    </button>
+                                )}
+                                {showForceEnd && (
+                                    <button
+                                        onClick={() => setConfirm({ label: "Terminer la partie et revenir au lobby ?", action: () => room.send("forceReturnToLobby") })}
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-orange-400 border border-gray-800 hover:border-orange-900/60 rounded-lg py-1.5 transition-colors"
+                                    >
+                                        <SkipForward className="w-3 h-3" />
+                                        Terminer la partie
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className={`${mobileTab === "scores" ? "hidden lg:flex" : "flex"} flex-col flex-1 min-h-0`}>
@@ -331,6 +373,32 @@ export default function GameShell({
                         ) : (
                             <p className="text-gray-500 text-sm mt-2">En attente de la manche suivante…</p>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation popup */}
+            {confirm && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20" onClick={() => setConfirm(null)}>
+                    <div
+                        className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-xs w-full mx-4 text-center shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <p className="text-white font-semibold mb-5">{confirm.label}</p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirm(null)}
+                                className="flex-1 py-2 rounded-lg text-sm text-gray-400 border border-gray-700 hover:border-gray-500 hover:text-gray-200 transition-colors"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={() => { confirm.action(); setConfirm(null); }}
+                                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white bg-red-700 hover:bg-red-600 transition-colors"
+                            >
+                                Confirmer
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

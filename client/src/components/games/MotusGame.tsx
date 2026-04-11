@@ -371,7 +371,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
     };
 
     // ── Scoreboard footer (VS guess dots + coop force-end) ─────────────────
-    const scoreboardFooter = (
+    const scoreboardFooter = (openConfirm: (label: string, action: () => void) => void) => (
         <>
             {mode === "vs" && phase === "playing" && (
                 <div className="mt-3 border-t border-gray-800 pt-3 flex flex-col gap-2">
@@ -412,7 +412,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             )}
             {isHost && mode === "coop" && phase === "playing" && (
                 <button
-                    onClick={() => room.send("forceEndRound")}
+                    onClick={() => openConfirm("Terminer la manche ?", () => room.send("forceEndRound"))}
                     className="mt-4 w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded-lg py-1.5 transition-colors"
                 >
                     Terminer la manche
