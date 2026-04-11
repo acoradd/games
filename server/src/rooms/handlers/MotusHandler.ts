@@ -101,8 +101,7 @@ export class MotusHandler implements GameHandler {
             const p = this.ctx.getPlayers().get(id);
             if (p) {
                 playerNames[id] = p.username;
-                const dbId = this.ctx.getPlayerDbId(id);
-                if (dbId) playerAvatars[dbId] = { username: p.username, gravatarUrl: p.gravatarUrl };
+                playerAvatars[id] = { username: p.username, gravatarUrl: p.gravatarUrl };
             }
         });
 
@@ -167,27 +166,27 @@ export class MotusHandler implements GameHandler {
         }
     }
 
-    async onMessage(type: string, sessionId: string, data: unknown): Promise<void> {
+    async onMessage(type: string, playerId: string, data: unknown): Promise<void> {
         if (type === "motus:guess") {
-            await this.handleGuess(sessionId, (data as { word?: string }).word ?? "");
+            await this.handleGuess(playerId, (data as { word?: string }).word ?? "");
         } else if (type === "motus:typing") {
-            this.handleTyping(sessionId, (data as { input?: string }).input ?? "");
+            this.handleTyping(playerId, (data as { input?: string }).input ?? "");
         } else if (type === "forceEndRound") {
-            this.handleForceEndRound(sessionId);
+            this.handleForceEndRound(playerId);
         }
     }
 
-    onEliminate(sessionId: string): void {
+    onEliminate(playerId: string): void {
         let gs: MotusGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
         catch { return; }
         if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
-        const p = gs.players[sessionId];
+        const p = gs.players[playerId];
         if (p) p.eliminated = true;
 
         if (gs.mode === "coop") {
-            if (gs.currentTurnId === sessionId) gs.currentTurnId = this.nextCoopPlayer(gs);
+            if (gs.currentTurnId === playerId) gs.currentTurnId = this.nextCoopPlayer(gs);
             const activeCount = gs.playerOrder.filter(id => gs.players[id] && !gs.players[id]!.eliminated).length;
             if (activeCount === 0) this.endRound(gs, null);
         } else {
@@ -209,15 +208,15 @@ export class MotusHandler implements GameHandler {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private async handleGuess(sessionId: string, word: string): Promise<void> {
+    private async handleGuess(playerId: string, word: string): Promise<void> {
         let gs: MotusGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
         catch { return; }
         if (gs.phase !== "playing") return;
 
-        const player = gs.players[sessionId];
+        const player = gs.players[playerId];
         if (!player || player.eliminated) return;
-        if (gs.mode === "coop" && sessionId !== gs.currentTurnId) return;
+        if (gs.mode === "coop" && playerId !== gs.currentTurnId) return;
         if (gs.mode === "vs" && player.solved) return;
 
         const normalized = this.normalize(word);
@@ -226,7 +225,7 @@ export class MotusHandler implements GameHandler {
 
         const wordExists = await prisma.word.findUnique({ where: { text: normalized } });
         if (!wordExists) {
-            this.ctx.sendTo(sessionId, "motus:invalid", { reason: "unknown_word" });
+            this.ctx.sendTo(playerId, "motus:invalid", { reason: "unknown_word" });
             return;
         }
 
@@ -234,9 +233,9 @@ export class MotusHandler implements GameHandler {
         const isSolved = result.every(r => r === "correct");
 
         if (gs.mode === "vs") {
-            const privateGuesses = this.vsGuesses.get(sessionId) ?? [];
+            const privateGuesses = this.vsGuesses.get(playerId) ?? [];
             privateGuesses.push({ word: normalized, result });
-            this.vsGuesses.set(sessionId, privateGuesses);
+            this.vsGuesses.set(playerId, privateGuesses);
 
             player.guesses.push({ word: "", result });
             if (isSolved) { player.solved = true; player.solvedAt = Date.now(); }
@@ -249,11 +248,10 @@ export class MotusHandler implements GameHandler {
             if (allDone) this.endRound(gs, null);
 
             this.ctx.setState(JSON.stringify(gs));
-            this.ctx.sendTo(sessionId, "motus:myGuesses", privateGuesses);
+            this.ctx.sendTo(playerId, "motus:myGuesses", privateGuesses);
         } else {
             // Coop
-            const guesserId = this.ctx.getPlayerDbId(sessionId) ?? sessionId;
-            gs.sharedGuesses.push({ word: normalized, result, guesserId });
+            gs.sharedGuesses.push({ word: normalized, result, guesserId: playerId });
             if (isSolved) {
                 this.endRound(gs, sessionId);
             } else if (gs.maxAttempts > 0 && gs.sharedGuesses.length >= gs.maxAttempts) {
@@ -265,16 +263,16 @@ export class MotusHandler implements GameHandler {
         }
     }
 
-    private handleTyping(sessionId: string, input: string): void {
+    private handleTyping(playerId: string, input: string): void {
         let gs: MotusGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
         catch { return; }
         if (gs.phase !== "playing" || gs.mode !== "coop") return;
-        if (gs.currentTurnId !== sessionId) return;
-        this.ctx.broadcastExcept(sessionId, "motus:typing", { input });
+        if (gs.currentTurnId !== playerId) return;
+        this.ctx.broadcastExcept(playerId, "motus:typing", { input });
     }
 
-    private handleForceEndRound(sessionId: string): void {
+    private handleForceEndRound(_playerId: string): void {
         // Only called for coop motus by host — LobbyRoom checks hostId before delegating
         let gs: MotusGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }

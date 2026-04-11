@@ -83,21 +83,21 @@ export class TronHandler implements GameHandler {
         this.dirs.clear();
         this.trails.clear();
 
-        playerIds.forEach((sessionId, i) => {
+        playerIds.forEach((playerId, i) => {
             if (i >= 4) return;
             const sp = startPositions[i]!;
-            const lp = this.ctx.getPlayers().get(sessionId);
-            playerOrder.push(sessionId);
-            playerNames[sessionId] = lp?.username ?? sessionId;
+            const lp = this.ctx.getPlayers().get(playerId);
+            playerOrder.push(playerId);
+            playerNames[playerId] = lp?.username ?? playerId;
 
-            players[sessionId] = {
+            players[playerId] = {
                 x: sp.x, y: sp.y, dir: sp.dir,
                 alive: true, eliminated: false,
                 color: TRON_COLORS[i]!,
                 score: 0,
                 eliminatedAt: 0,
             };
-            this.dirs.set(sessionId, sp.dir);
+            this.dirs.set(playerId, sp.dir);
 
             if (mode === "Snake") {
                 const trail: number[] = [];
@@ -114,7 +114,7 @@ export class TronHandler implements GameHandler {
                         trail.push(idx);
                     }
                 }
-                this.trails.set(sessionId, trail);
+                this.trails.set(playerId, trail);
             } else {
                 grid[sp.y * gridSize + sp.x] = String(i);
             }
@@ -148,23 +148,23 @@ export class TronHandler implements GameHandler {
         this.interval = this.ctx.clock.setInterval(() => this.tick(), tickMs);
     }
 
-    onMessage(type: string, sessionId: string, data: unknown): void {
+    onMessage(type: string, playerId: string, data: unknown): void {
         if (type === "tron:input") {
             const dir = (data as { dir?: string }).dir;
             const valid = ["up", "down", "left", "right"];
             if (dir && valid.includes(dir)) {
-                this.dirs.set(sessionId, dir as TronPlayer["dir"]);
+                this.dirs.set(playerId, dir as TronPlayer["dir"]);
             }
         }
     }
 
-    onEliminate(sessionId: string): void {
+    onEliminate(playerId: string): void {
         let gs: TronGameState;
         try { gs = JSON.parse(this.ctx.getState()) as TronGameState; }
         catch { return; }
         if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
-        const p = gs.players[sessionId];
+        const p = gs.players[playerId];
         if (p) { p.alive = false; p.eliminated = true; p.eliminatedAt = gs.tick ?? 0; }
 
         this.checkRoundEnd(gs);
@@ -189,10 +189,10 @@ export class TronHandler implements GameHandler {
         const { gridSize, mode } = gs;
         const applesEaten = new Set<number>();
 
-        for (const [sessionId, p] of Object.entries(gs.players)) {
+        for (const [playerId, p] of Object.entries(gs.players)) {
             if (!p.alive) continue;
-            const pIdx = gs.playerOrder.indexOf(sessionId);
-            const pendingDir = this.dirs.get(sessionId);
+            const pIdx = gs.playerOrder.indexOf(playerId);
+            const pendingDir = this.dirs.get(playerId);
             if (pendingDir && pendingDir !== OPPOSITES[p.dir]) p.dir = pendingDir;
 
             const { dx, dy } = DIR_DELTAS[p.dir] ?? { dx: 1, dy: 0 };
@@ -209,7 +209,7 @@ export class TronHandler implements GameHandler {
             grid[newIdx] = String(pIdx);
 
             if (mode === "Snake") {
-                const trail = this.trails.get(sessionId) ?? [];
+                const trail = this.trails.get(playerId) ?? [];
                 trail.unshift(newIdx);
 
                 let ateApple = false;
@@ -226,7 +226,7 @@ export class TronHandler implements GameHandler {
                     const tail = trail.pop();
                     if (tail !== undefined) grid[tail] = ".";
                 }
-                this.trails.set(sessionId, trail);
+                this.trails.set(playerId, trail);
             }
 
             p.x = nx;

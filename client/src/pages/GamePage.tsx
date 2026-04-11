@@ -5,43 +5,10 @@ import type { LobbyPlayer, LobbyState, MemoryGameState, TronGameState, Bomberman
 import { joinLobby } from "../services/lobbyService";
 import { getStoredPlayer } from "../services/playerService";
 import { getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "../webservices/currentLobbyRoom";
-import { colyseusClient } from "../webservices/colyseus";
 import MemoryGame from "../components/games/MemoryGame";
 import TronGame from "../components/games/TronGame";
 import BombermanGame from "../components/games/BombermanGame";
 import MotusGame from "../components/games/MotusGame";
-
-// ── Reconnection token persistence ─────────────────────────────────────────
-function tokenKey(roomId: string) { return `reconnect_${roomId}`; }
-function slugKey(roomId: string) { return `game_slug_${roomId}`; }
-function loadToken(roomId: string) { return localStorage.getItem(tokenKey(roomId)) ?? ""; }
-function saveToken(roomId: string, token: string) { localStorage.setItem(tokenKey(roomId), token); }
-function clearToken(roomId: string) { localStorage.removeItem(tokenKey(roomId)); localStorage.removeItem(slugKey(roomId)); }
-
-// ── Cross-tab detection via BroadcastChannel ────────────────────────────────
-function checkOtherTabActive(roomId: string): Promise<boolean> {
-    return new Promise((resolve) => {
-        const channel = new BroadcastChannel(`room_${roomId}`);
-        let resolved = false;
-
-        channel.onmessage = (e) => {
-            if (e.data === "active" && !resolved) {
-                resolved = true;
-                channel.close();
-                resolve(true);
-            }
-        };
-
-        channel.postMessage("check");
-
-        setTimeout(() => {
-            if (!resolved) {
-                channel.close();
-                resolve(false);
-            }
-        }, 200);
-    });
-}
 
 export default function GamePage() {
     const { slug = "", roomId = "" } = useParams<{ slug: string; roomId: string }>();
@@ -49,16 +16,14 @@ export default function GamePage() {
     const location = useLocation();
 
     const roomRef = useRef<Room<LobbyState> | null>(null);
-    const reconnectionTokenRef = useRef<string>("");
     const cancelledRef = useRef(false);
     const returningToLobbyRef = useRef(false);
-    const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+
+    const myPlayerId = String(getStoredPlayer()?.player.id ?? "");
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [reconnecting, setReconnecting] = useState(false);
 
-    const [sessionId, setSessionId] = useState("");
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
 
@@ -66,15 +31,6 @@ export default function GamePage() {
     const [tronState, setTronState] = useState<TronGameState | null>(null);
     const [bombermanState, setBombermanState] = useState<BombermanGameState | null>(null);
     const [motusState, setMotusState] = useState<MotusGameState | null>(null);
-
-    function openBroadcastChannel(id: string) {
-        broadcastChannelRef.current?.close();
-        const channel = new BroadcastChannel(`room_${id}`);
-        channel.onmessage = (e) => {
-            if (e.data === "check") channel.postMessage("active");
-        };
-        broadcastChannelRef.current = channel;
-    }
 
     const syncState = useCallback((state: unknown) => {
         if (!state) return;
@@ -85,15 +41,15 @@ export default function GamePage() {
         if (playersRaw) {
             if (typeof (playersRaw as Map<string, unknown>).forEach === "function") {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                    list.push({ id: p.id, sessionId: p.sessionId ?? "", username: p.username, isHost: p.isHost, isReady: p.isReady,
                                 isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                                isSpectator: p.isSpectator ?? false, gravatarUrl: p.gravatarUrl ?? '' })
+                                isSpectator: p.isSpectator ?? false, gravatarUrl: p.gravatarUrl ?? "" })
                 );
             } else {
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
-                    list.push({ id: p.id, username: p.username, isHost: p.isHost, isReady: p.isReady,
+                    list.push({ id: p.id, sessionId: p.sessionId ?? "", username: p.username, isHost: p.isHost, isReady: p.isReady,
                                 isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                                isSpectator: p.isSpectator ?? false, gravatarUrl: p.gravatarUrl ?? '' })
+                                isSpectator: p.isSpectator ?? false, gravatarUrl: p.gravatarUrl ?? "" })
                 );
             }
         }
@@ -128,29 +84,15 @@ export default function GamePage() {
     }, []);
 
     const bindRoomHandlers = useCallback((room: Room<LobbyState>, fromCurrentRoom = false) => {
-        // Helper: redirect to lobby when the room was reset (e.g. host returned while we were away)
         function redirectToLobby() {
-            clearToken(roomId);
             returningToLobbyRef.current = true;
             navigate(`/lobby/${roomId}`, { state: { fromReturnToLobby: true } });
         }
 
         if (room.state) {
             const s = room.state as unknown as Record<string, unknown>;
-            // Skip redirect on the initial call when navigating directly from the lobby:
-            // the Colyseus state patch (status="game") hasn't arrived yet at this point,
-            // so room.state.status may still read "lobby" (stale). onStateChange will handle it.
             if ((s["status"] as string) === "lobby" && !fromCurrentRoom && !cancelledRef.current) {
-                // We reconnected but the lobby was already reset and our entry was removed from
-                // state.players (returnToLobby purges disconnected players). A plain Colyseus
-                // reconnect doesn't call onJoin, so we would never be re-added.
-                //
-                // Fix: explicitly leave + clear the room NOW (synchronously, before navigate),
-                // so that LobbyPage's connect() finds no current room and calls joinLobby()
-                // fresh — triggering onJoin which re-adds us to state.players.
-                // Set returningToLobbyRef so the useEffect cleanup doesn't double-leave.
                 returningToLobbyRef.current = true;
-                clearToken(roomId);
                 clearCurrentRoom();
                 room.leave();
                 navigate(`/lobby/${roomId}`, { state: { fromReturnToLobby: true } });
@@ -168,11 +110,9 @@ export default function GamePage() {
             syncState(state as unknown as LobbyState);
         });
 
-        room.onLeave((code) => {
-            if (code === 4000 || code === 1000) return;
-            if (cancelledRef.current) return;
-            setReconnecting(true);
-            attemptReconnect(reconnectionTokenRef.current);
+        room.onLeave(() => {
+            if (cancelledRef.current || returningToLobbyRef.current) return;
+            navigate("/");
         });
 
         room.onMessage("lobby:return", () => {
@@ -181,39 +121,6 @@ export default function GamePage() {
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncState]);
-
-    async function attemptReconnect(token: string) {
-        const MAX_ATTEMPTS = 3;
-        const DELAY_MS = 3000;
-
-        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            if (cancelledRef.current) return;
-            if (attempt > 0) {
-                await new Promise<void>((resolve) => setTimeout(resolve, DELAY_MS));
-            }
-            try {
-                const newRoom = await colyseusClient.reconnect<LobbyState>(token);
-                if (cancelledRef.current) { newRoom.leave(); return; }
-
-                reconnectionTokenRef.current = newRoom.reconnectionToken;
-                saveToken(roomId, newRoom.reconnectionToken);
-                roomRef.current = newRoom;
-                setCurrentRoom(newRoom);
-                setSessionId(newRoom.sessionId);
-                bindRoomHandlers(newRoom);
-                openBroadcastChannel(roomId);
-                setReconnecting(false);
-                return;
-            } catch (err) {
-                console.warn(`[GamePage] reconnect attempt ${attempt + 1} failed:`, err);
-            }
-        }
-
-        clearToken(roomId);
-        if (!cancelledRef.current) {
-            navigate("/");
-        }
-    }
 
     useEffect(() => {
         if (!roomId) return;
@@ -228,39 +135,17 @@ export default function GamePage() {
         async function connect() {
             try {
                 let room = getCurrentRoom(roomId);
-                // fromCurrentRoom=true means the room object was handed off from LobbyPage;
-                // the initial room.state may still read status="lobby" (stale, pre-patch).
                 const fromCurrentRoom = !!room;
 
                 if (!room) {
-                    const storedToken = loadToken(roomId);
-                    if (storedToken) {
-                        const anotherTabActive = await checkOtherTabActive(roomId);
-                        if (!anotherTabActive) {
-                            try {
-                                room = await colyseusClient.reconnect<LobbyState>(storedToken);
-                            } catch {
-                                clearToken(roomId);
-                                room = await joinLobby(roomId);
-                            }
-                        } else {
-                            room = await joinLobby(roomId);
-                        }
-                    } else {
-                        room = await joinLobby(roomId);
-                    }
+                    room = await joinLobby(roomId);
                 }
 
                 if (cancelledRef.current) { room.leave(); return; }
 
-                reconnectionTokenRef.current = room.reconnectionToken;
-                saveToken(roomId, room.reconnectionToken);
-                localStorage.setItem(slugKey(roomId), slug);
                 roomRef.current = room;
                 setCurrentRoom(room);
-                setSessionId(room.sessionId);
                 bindRoomHandlers(room, fromCurrentRoom);
-                openBroadcastChannel(roomId);
                 setLoading(false);
             } catch (err: unknown) {
                 console.error("[GamePage] connect error:", err);
@@ -276,13 +161,10 @@ export default function GamePage() {
 
         return () => {
             cancelledRef.current = true;
-            broadcastChannelRef.current?.close();
-            broadcastChannelRef.current = null;
             if (roomRef.current) {
                 if (!returningToLobbyRef.current) {
                     roomRef.current.leave();
                     clearCurrentRoom();
-                    clearToken(roomId);
                 }
                 roomRef.current = null;
             }
@@ -311,28 +193,20 @@ export default function GamePage() {
         );
     }
 
-    const isSpectator = players.find((p) => p.id === sessionId)?.isSpectator ?? false;
+    const isSpectator = players.find((p) => p.id === myPlayerId)?.isSpectator ?? false;
 
     return (
         <>
-            {reconnecting && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-                    <div className="bg-gray-900 border border-gray-700 rounded-2xl px-8 py-6 text-center">
-                        <p className="text-white font-semibold mb-1">Reconnexion…</p>
-                        <p className="text-gray-400 text-sm">Tentative de reconnexion au serveur</p>
-                    </div>
-                </div>
-            )}
             {isSpectator && (
                 <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 bg-gray-800/90 border border-gray-600 text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm pointer-events-none">
-                    👁 Spectateur
+                    Spectateur
                 </div>
             )}
 
             {slug === "memory" && memoryState ? (
                 <MemoryGame
                     room={roomRef.current!}
-                    sessionId={sessionId}
+                    sessionId={myPlayerId}
                     gameState={memoryState}
                     players={players}
                     chatMessages={chatMessages}
@@ -340,7 +214,7 @@ export default function GamePage() {
             ) : slug === "tron" && tronState ? (
                 <TronGame
                     room={roomRef.current!}
-                    sessionId={sessionId}
+                    sessionId={myPlayerId}
                     gameState={tronState}
                     players={players}
                     chatMessages={chatMessages}
@@ -348,7 +222,7 @@ export default function GamePage() {
             ) : slug === "bomberman" && bombermanState ? (
                 <BombermanGame
                     room={roomRef.current!}
-                    sessionId={sessionId}
+                    sessionId={myPlayerId}
                     gameState={bombermanState}
                     players={players}
                     chatMessages={chatMessages}
@@ -356,7 +230,7 @@ export default function GamePage() {
             ) : slug === "motus" && motusState ? (
                 <MotusGame
                     room={roomRef.current!}
-                    sessionId={sessionId}
+                    sessionId={myPlayerId}
                     gameState={motusState}
                     players={players}
                     chatMessages={chatMessages}

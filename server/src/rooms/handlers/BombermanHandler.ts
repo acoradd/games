@@ -122,13 +122,13 @@ export class BombermanHandler implements GameHandler {
         this.bombsPending.clear();
         this.bombIdCounter = 0;
 
-        playerIds.forEach((sessionId, i) => {
+        playerIds.forEach((playerId, i) => {
             if (i >= 4) return;
             const corner = spawnCorners[i] ?? [0, 0];
-            const lp = this.ctx.getPlayers().get(sessionId);
-            playerOrder.push(sessionId);
-            playerNames[sessionId] = lp?.username ?? sessionId;
-            players[sessionId] = {
+            const lp = this.ctx.getPlayers().get(playerId);
+            playerOrder.push(playerId);
+            playerNames[playerId] = lp?.username ?? playerId;
+            players[playerId] = {
                 x: corner[0]!, y: corner[1]!,
                 alive: true, eliminated: false,
                 lives,
@@ -164,25 +164,25 @@ export class BombermanHandler implements GameHandler {
         this.interval = this.ctx.clock.setInterval(() => this.tick(), GAME_TICK_MS);
     }
 
-    onMessage(type: string, sessionId: string, data: unknown): void {
+    onMessage(type: string, playerId: string, data: unknown): void {
         if (type === "bomberman:move") {
             const dir = (data as { dir?: string }).dir;
             const valid = ["up", "down", "left", "right"];
             if (dir && valid.includes(dir)) {
-                this.movePending.set(sessionId, dir as "up" | "down" | "left" | "right");
+                this.movePending.set(playerId, dir as "up" | "down" | "left" | "right");
             }
         } else if (type === "bomberman:bomb") {
-            this.bombsPending.add(sessionId);
+            this.bombsPending.add(playerId);
         }
     }
 
-    onEliminate(sessionId: string): void {
+    onEliminate(playerId: string): void {
         let gs: BombermanGameState;
         try { gs = JSON.parse(this.ctx.getState()) as BombermanGameState; }
         catch { return; }
         if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
-        const p = gs.players[sessionId];
+        const p = gs.players[playerId];
         if (p) { p.lives = 0; p.alive = false; p.eliminated = true; p.eliminatedAt = gs.tick ?? 0; }
 
         this.checkRoundEnd(gs);
@@ -217,9 +217,9 @@ export class BombermanHandler implements GameHandler {
         };
 
         // 1. Movement
-        for (const [sessionId, p] of Object.entries(gs.players)) {
+        for (const [playerId, p] of Object.entries(gs.players)) {
             if (!p.alive) continue;
-            const dir = this.movePending.get(sessionId);
+            const dir = this.movePending.get(playerId);
             if (!dir) continue;
             const { dx, dy } = DIR_DELTAS[dir];
             const nx = p.x + dx;
@@ -234,12 +234,12 @@ export class BombermanHandler implements GameHandler {
         this.movePending.clear();
 
         // 2. Bomb placement
-        for (const sessionId of this.bombsPending) {
-            const p = gs.players[sessionId];
+        for (const playerId of this.bombsPending) {
+            const p = gs.players[playerId];
             if (!p || !p.alive) continue;
             if (p.bombsPlaced >= p.bombsMax) continue;
             if (gs.bombs.some((b) => b.x === p.x && b.y === p.y)) continue;
-            gs.bombs.push({ id: this.bombIdCounter++, x: p.x, y: p.y, ownerId: sessionId, fuseLeft: FUSE_TICKS, range: p.range });
+            gs.bombs.push({ id: this.bombIdCounter++, x: p.x, y: p.y, ownerId: playerId, fuseLeft: FUSE_TICKS, range: p.range });
             p.bombsPlaced++;
         }
         this.bombsPending.clear();
@@ -298,7 +298,7 @@ export class BombermanHandler implements GameHandler {
             const newExplosions: ExplosionBM[] = [];
             for (const exp of gs.explosions) {
                 exp.ticksLeft--;
-                for (const [sessionId, p] of Object.entries(gs.players)) {
+                for (const [playerId, p] of Object.entries(gs.players)) {
                     if (!p.alive || p.invincibleTicks > 0) continue;
                     if (!exp.cells.some((c) => c.x === p.x && c.y === p.y)) continue;
                     if (p.shield) {
@@ -310,7 +310,7 @@ export class BombermanHandler implements GameHandler {
                             p.alive = false; p.eliminated = true; p.eliminatedAt = gs.tick;
                         } else {
                             p.invincibleTicks = INVINCIBLE_TICKS;
-                            const pi = gs.playerOrder.indexOf(sessionId);
+                            const pi = gs.playerOrder.indexOf(playerId);
                             const dynamicCorners = [[0, 0], [gs.cols - 1, 0], [0, gs.rows - 1], [gs.cols - 1, gs.rows - 1]];
                             const corner = dynamicCorners[pi] ?? dynamicCorners[0]!;
                             p.x = corner[0]!; p.y = corner[1]!;

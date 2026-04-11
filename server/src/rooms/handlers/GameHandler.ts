@@ -23,12 +23,12 @@ export interface RoomContext {
     getState(): string;
     /** Write updated gameStateJson. */
     setState(json: string): void;
-    /** Send a message to a single client by sessionId. */
-    sendTo(sessionId: string, type: string, data?: unknown): void;
-    /** Broadcast to all clients except the given sessionId. */
-    broadcastExcept(exceptSessionId: string, type: string, data?: unknown): void;
-    /** Returns the stable DB player ID (as string) for a given sessionId. */
-    getPlayerDbId(sessionId: string): string | undefined;
+    /** Send a message to a single client by playerId. */
+    sendTo(playerId: string, type: string, data?: unknown): void;
+    /** Broadcast to all clients except the given playerId. */
+    broadcastExcept(exceptPlayerId: string, type: string, data?: unknown): void;
+    /** Returns the playerId as-is (identity — kept for compatibility). */
+    getPlayerDbId(playerId: string): string | undefined;
     /** Called by the handler when the game (all rounds) has ended. */
     onGameEnded(roundPoints: Record<string, number>, winners?: string[]): void;
 }
@@ -51,7 +51,7 @@ export interface GameHandler {
      * Called when a player disconnects permanently during a game.
      * The handler should update the game state accordingly (skip turn, check end, etc.)
      */
-    onEliminate(sessionId: string): void;
+    onEliminate(playerId: string): void;
 
     /**
      * Clean up all timers and intervals.

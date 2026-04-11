@@ -1,5 +1,6 @@
 export interface LobbyPlayer {
-    id: string;
+    id: string;         // DB playerId (stable)
+    sessionId: string;  // current Colyseus session
     username: string;
     gravatarUrl: string;
     isHost: boolean;

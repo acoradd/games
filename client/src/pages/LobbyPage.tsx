@@ -97,7 +97,7 @@ export default function LobbyPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [sessionId, setSessionId] = useState('');
+    const myPlayerId = String(getStoredPlayer()?.player.id ?? '');
     const [players, setPlayers] = useState<LobbyPlayer[]>([]);
     const [hostId, setHostId] = useState('');
     const [selectedSlug, setSelectedSlug] = useState('');
@@ -112,7 +112,7 @@ export default function LobbyPage() {
     const mobileTabRef = useRef(mobileTab);
     useEffect(() => { mobileTabRef.current = mobileTab; }, [mobileTab]);
 
-    const isHost = sessionId !== '' && sessionId === hostId;
+    const isHost = myPlayerId !== '' && myPlayerId === hostId;
     const selectedGame = gameModes.find((g) => g.slug === selectedSlug) ?? null;
 
     // ── Sync state depuis Colyseus ──────────────────────────────────────────
@@ -128,7 +128,7 @@ export default function LobbyPage() {
             if (typeof (playersRaw as Map<string, unknown>).forEach === 'function') {
                 (playersRaw as Map<string, LobbyPlayer>).forEach((p) =>
                     list.push({
-                        id: p.id, username: p.username, gravatarUrl: p.gravatarUrl ?? '',
+                        id: p.id, sessionId: p.sessionId ?? '', username: p.username, gravatarUrl: p.gravatarUrl ?? '',
                         isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
                         isSpectator: p.isSpectator ?? false
@@ -138,7 +138,7 @@ export default function LobbyPage() {
                 // fallback plain object
                 Object.values(playersRaw as Record<string, LobbyPlayer>).forEach((p) =>
                     list.push({
-                        id: p.id, username: p.username, gravatarUrl: p.gravatarUrl ?? '',
+                        id: p.id, sessionId: p.sessionId ?? '', username: p.username, gravatarUrl: p.gravatarUrl ?? '',
                         isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
                         isSpectator: p.isSpectator ?? false
@@ -186,14 +186,6 @@ export default function LobbyPage() {
         }
 
         async function connect() {
-            // Si on a un token de reconnexion + un slug stocké → on était dans la partie, retourner dans GamePage
-            const storedToken = localStorage.getItem(`reconnect_${roomId}`);
-            const storedSlug = localStorage.getItem(`game_slug_${roomId}`);
-            if (storedToken && storedSlug) {
-                navigate(`/game/${storedSlug}/play/${roomId}`, {replace: true});
-                return;
-            }
-
             try {
                 let room = getCurrentRoom(roomId);
                 if (!room) {
@@ -206,7 +198,8 @@ export default function LobbyPage() {
 
                 roomRef.current = room;
                 setCurrentRoom(room);
-                setSessionId(room.sessionId);
+
+                const fromReturnToLobby = (location.state as Record<string, unknown> | null)?.fromReturnToLobby === true;
 
                 // Sync initial state immediately (room from store already has state)
                 if (room.state) {
@@ -215,7 +208,6 @@ export default function LobbyPage() {
                     // rejoindre en tant que spectateur.
                     // NB : si on vient d'un lobby:return, le patch serveur (status="lobby") peut ne pas
                     // encore être arrivé → on ne redirige pas pour éviter une boucle.
-                    const fromReturnToLobby = (location.state as Record<string, unknown> | null)?.fromReturnToLobby === true;
                     if (!fromReturnToLobby) {
                         const s = room.state as unknown as Record<string, unknown>;
                         const status = (s['status'] as string) ?? 'lobby';
@@ -229,6 +221,17 @@ export default function LobbyPage() {
                 }
 
                 room.onStateChange((state) => {
+                    // If we just joined a room already in progress, redirect to GamePage
+                    if (!startingGameRef.current && !fromReturnToLobby) {
+                        const s = state as unknown as Record<string, unknown>;
+                        const status = (s['status'] as string) ?? 'lobby';
+                        const gameSlug = (s['selectedGameSlug'] as string) ?? '';
+                        if (status === 'game' && gameSlug) {
+                            startingGameRef.current = true;
+                            navigate(`/game/${gameSlug}/play/${roomId}`, { replace: true });
+                            return;
+                        }
+                    }
                     syncState(state as unknown as LobbyState);
                 });
 
@@ -301,8 +304,8 @@ export default function LobbyPage() {
         setChatInput('');
     }
 
-    function handleKick(sessionId: string) {
-        roomRef.current?.send('kick', {sessionId});
+    function handleKick(playerId: string) {
+        roomRef.current?.send('kick', {playerId});
     }
 
     async function handleCopy(type: 'code' | 'link') {
@@ -314,7 +317,7 @@ export default function LobbyPage() {
         setTimeout(() => setCopied(null), 2000);
     }
 
-    const me = players.find((p) => p.id === sessionId);
+    const me = players.find((p) => p.id === myPlayerId);
     const allReady = players.length > 0 && players.every((p) => p.isReady);
 
     // ── États de chargement / erreur ────────────────────────────────────────
@@ -533,7 +536,7 @@ export default function LobbyPage() {
                                         </div>
                                         <span className="text-sm font-medium truncate">
                                             {p.username}
-                                            {p.id === sessionId && (
+                                            {p.id === myPlayerId && (
                                                 <span className="text-gray-600 text-xs ml-1">(vous)</span>
                                             )}
                                         </span>
@@ -545,7 +548,7 @@ export default function LobbyPage() {
                                         <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
                                             {p.isReady ? 'prêt' : 'attente'}
                                         </span>
-                                        {isHost && p.id !== sessionId && (
+                                        {isHost && p.id !== myPlayerId && (
                                             <button
                                                 onClick={() => handleKick(p.id)}
                                                 title="Expulser"
@@ -569,7 +572,7 @@ export default function LobbyPage() {
                                 <p className="text-gray-700 text-xs text-center mt-4">Aucun message.</p>
                             )}
                             {chatMessages.map((msg, i) => {
-                                const isMine = msg.username === players.find((p) => p.id === sessionId)?.username;
+                                const isMine = msg.username === players.find((p) => p.id === myPlayerId)?.username;
                                 const sender = players.find((p) => p.username === msg.username);
                                 return (
                                     <div key={i} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'} items-end`}>

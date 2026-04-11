@@ -75,32 +75,29 @@ export async function deleteAccount(playerId: number) {
 
 export async function recordGameSessions(
     slug: string,
-    playerIdMap: Record<string, number>,
+    playerIds: string[],
     roundPoints: Record<string, number>,
     explicitWinners?: string[]
 ) {
-    const sessionIds = Object.keys(playerIdMap);
-    if (sessionIds.length === 0) return;
+    if (playerIds.length === 0) return;
 
     let winners: string[];
     if (explicitWinners !== undefined) {
         winners = explicitWinners;
     } else {
-        const scores = sessionIds.map((sid) => roundPoints[sid] ?? 0);
+        const scores   = playerIds.map((id) => roundPoints[id] ?? 0);
         const maxScore = Math.max(...scores);
-        winners = sessionIds.filter((sid) => (roundPoints[sid] ?? 0) === maxScore && maxScore > 0);
+        winners = playerIds.filter((id) => (roundPoints[id] ?? 0) === maxScore && maxScore > 0);
     }
 
     const gameId = randomUUID();
     await prisma.gameSession.createMany({
-        data: sessionIds
-            .filter((sid) => playerIdMap[sid] !== undefined)
-            .map((sid) => ({
-                gameId,
-                playerId: playerIdMap[sid]!,
-                gameModeSlug: slug,
-                result: winners.includes(sid) ? "win" : "loss",
-                score: roundPoints[sid] ?? 0,
-            })),
+        data: playerIds.map((id) => ({
+            gameId,
+            playerId:     parseInt(id, 10),
+            gameModeSlug: slug,
+            result:       winners.includes(id) ? "win" : "loss",
+            score:        roundPoints[id] ?? 0,
+        })),
     });
 }

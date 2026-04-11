@@ -125,22 +125,13 @@ export default function GameShell({
                                 </div>
                                 <span className="flex items-center gap-1 truncate min-w-0">
                                     {isActive && !isElim && <Play className="w-3 h-3 text-violet-400 shrink-0 fill-violet-400" />}
-                                    {!isConn && !isElim && <WifiOff className="w-3 h-3 text-red-500 shrink-0" title="Reconnexion…" />}
+                                    {!isConn && !isElim && <WifiOff className="w-3 h-3 text-red-500 shrink-0" title="Déconnecté" />}
                                     <span className="truncate">{name}</span>
                                     {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
                                     {isElim && <X className="w-3 h-3 text-gray-600 ml-1 shrink-0" />}
                                     {isAlive === false && !isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">mort</span>}
-                                    {!isConn && !isElim && <span className="text-gray-500 text-xs ml-1 shrink-0">(reconnexion…)</span>}
+                                    {!isConn && !isElim && <span className="text-gray-500 text-xs ml-1 shrink-0">(déconnecté)</span>}
                                 </span>
-                                {isHost && !isConn && !isElim && (
-                                    <button
-                                        onClick={() => room.send("kick", { sessionId: id })}
-                                        title="Expulser"
-                                        className="shrink-0 text-gray-600 hover:text-red-400 transition-colors ml-auto"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
-                                )}
                             </span>
                             <span className="shrink-0 font-bold text-indigo-400 tabular-nums">
                                 {multiRound

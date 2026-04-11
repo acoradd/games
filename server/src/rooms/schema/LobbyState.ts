@@ -7,7 +7,8 @@ export class ChatMessage extends Schema {
 }
 
 export class LobbyPlayer extends Schema {
-    @type("string") id: string = "";
+    @type("string") id: string = "";          // DB playerId (stable string)
+    @type("string") sessionId: string = "";   // current/last Colyseus session
     @type("string") username: string = "";
     @type("string") gravatarUrl: string = "";
     @type("boolean") isHost: boolean = false;

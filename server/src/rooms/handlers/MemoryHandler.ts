@@ -62,9 +62,9 @@ export class MemoryHandler implements GameHandler {
         const scores: Record<string, number>       = {};
         const playerNames: Record<string, string>  = { ...existingNames };
 
-        this.ctx.getPlayers().forEach((p, sessionId) => {
-            playerNames[sessionId] = p.username;
-            if (!p.isEliminated) scores[sessionId] = 0;
+        this.ctx.getPlayers().forEach((p, id) => {
+            playerNames[id] = p.username;
+            if (!p.isEliminated) scores[id] = 0;
         });
 
         const playerIds = Array.from(this.ctx.getPlayers().keys())
@@ -87,20 +87,20 @@ export class MemoryHandler implements GameHandler {
         this.startTurnTimer(gs);
     }
 
-    onMessage(type: string, sessionId: string, data: unknown): void {
+    onMessage(type: string, playerId: string, data: unknown): void {
         if (type === "flipCard") {
-            this.handleFlipCard(sessionId, (data as { index?: number }).index ?? -1);
+            this.handleFlipCard(playerId, (data as { index?: number }).index ?? -1);
         }
     }
 
-    onEliminate(sessionId: string): void {
+    onEliminate(playerId: string): void {
         let gs: MemoryGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MemoryGameState; }
         catch { return; }
 
         if (gs.phase === "ended" || gs.phase === "roundEnd") return;
 
-        const wasTheirTurn = gs.currentTurnId === sessionId;
+        const wasTheirTurn = gs.currentTurnId === playerId;
 
         if (wasTheirTurn) {
             gs.cards.forEach((c) => { if (c.isFlipped && !c.isMatched) c.isFlipped = false; });
@@ -135,14 +135,14 @@ export class MemoryHandler implements GameHandler {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private handleFlipCard(sessionId: string, index: number): void {
+    private handleFlipCard(playerId: string, index: number): void {
         let gs: MemoryGameState;
         try { gs = JSON.parse(this.ctx.getState()) as MemoryGameState; }
         catch { return; }
 
         const { phase, currentTurnId, cards } = gs;
         if (phase === "revealing" || phase === "ended" || phase === "roundEnd") return;
-        if (sessionId !== currentTurnId) return;
+        if (playerId !== currentTurnId) return;
         if (typeof index !== "number" || index < 0 || index >= cards.length) return;
 
         const card = cards[index];
@@ -164,7 +164,7 @@ export class MemoryHandler implements GameHandler {
                 // Match
                 firstCard.isMatched = true;
                 card.isMatched = true;
-                gs.scores[sessionId] = (gs.scores[sessionId] ?? 0) + 1;
+                gs.scores[playerId] = (gs.scores[playerId] ?? 0) + 1;
                 gs.firstFlippedIndex = -1;
 
                 if (cards.every((c) => c.isMatched)) {
