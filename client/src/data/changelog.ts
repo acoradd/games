@@ -12,6 +12,21 @@ export interface ChangelogVersion {
 
 export const changelog: ChangelogVersion[] = [
     {
+        version: '0.8',
+        date: '11/04/2026',
+        entries: [
+            { date: '11/04/2026', type: 'fix', label: 'Meilleure gestion des reconnexions: basée sur l\'identifiant du joueur et plus sur ça session' },
+            { date: '11/04/2026', type: 'feat', label: 'Reconnexion en cours de partie sur Motus : le joueur retrouve ses propositions et reprend sa place' },
+            { date: '11/04/2026', type: 'feat', label: 'Motus coop : ordre de passage fixe sur toute la partie, rotation au joueur suivant à chaque nouvelle manche' },
+            { date: '11/04/2026', type: 'feat', label: 'Bouton "Déclarer forfait" pour quitter une partie en cours (avec confirmation)' },
+            { date: '11/04/2026', type: 'feat', label: 'Bouton "Terminer la partie" pour l\'hôte, disponible à tout moment (avec confirmation)' },
+            { date: '11/04/2026', type: 'feat', label: 'Couronne de l\'hôte et indicateur de connexion visibles dans les scores en jeu' },
+            { date: '11/04/2026', type: 'fix', label: 'La manche se termine automatiquement si tous les joueurs connectés ont fini (Motus)' },
+            { date: '11/04/2026', type: 'fix', label: 'Le rôle d\'hôte est réattribué immédiatement à la déconnexion, même sur les jeux autorisant la reconnexion' },
+            { date: '11/04/2026', type: 'fix', label: 'Motus VS : clavier plus lisible avec meilleure distinction entre lettres absentes et lettres non testées' },
+        ],
+    },
+    {
         version: '0.7',
         date: '07/04/2026',
         entries: [
