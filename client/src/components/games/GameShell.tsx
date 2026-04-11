@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import type { Room } from "@colyseus/sdk";
-import type { LobbyPlayer, LobbyState, ChatMsg, GenericGameState } from "../../models/Lobby";
-import Avatar from "../Avatar";
-import { X, Send, Play, Eye, Trophy, WifiOff, Crown, LogOut, SkipForward } from "lucide-react";
+import type {Room} from '@colyseus/sdk';
+import {Crown, Eye, LogOut, Play, Send, SkipForward, Trophy, WifiOff, X} from 'lucide-react';
+import {useEffect, useRef, useState} from 'react';
+import type {ChatMsg, GenericGameState, LobbyPlayer, LobbyState} from '../../models/Lobby';
+import Avatar from '../Avatar';
 
 interface Props {
     room: Room<LobbyState>;
@@ -129,9 +129,9 @@ export default function GameShell({
 
                     return (
                         <li key={id} className={`flex items-center justify-between gap-2 text-sm ${
-                            isElim ? "text-gray-600" : isActive ? "text-violet-300" : "text-gray-200"
+                            isActive ? "text-violet-300" : "text-gray-200"
                         }`}>
-                            <span className={`truncate flex items-center gap-2 min-w-0 ${isElim ? "line-through" : ""}`}>
+                            <span className="truncate flex items-center gap-2 min-w-0">
                                 <div className="relative shrink-0">
                                     <Avatar username={name} gravatarUrl={lp?.gravatarUrl || null} size="sm" />
                                     {/* game color or connection dot at bottom-right */}
@@ -153,7 +153,7 @@ export default function GameShell({
                                 <span className="flex items-center gap-1 truncate min-w-0">
                                     {isActive && !isElim && <Play className="w-3 h-3 text-violet-400 shrink-0 fill-violet-400" />}
                                     {!isConn && <WifiOff className="w-3 h-3 text-red-500 shrink-0" title="Déconnecté" />}
-                                    <span className="truncate">{name}</span>
+                                    <span className={`truncate ${isElim ? "line-through" : ""}`}>{name}</span>
                                     {isMe && <span className="text-gray-600 text-xs shrink-0">(vous)</span>}
                                     {isElim && <X className="w-3 h-3 text-gray-600 ml-1 shrink-0" />}
                                     {isAlive === false && !isElim && <span className="text-gray-600 text-xs ml-1 shrink-0">mort</span>}

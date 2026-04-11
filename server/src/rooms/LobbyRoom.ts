@@ -232,11 +232,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             existing.username    = auth.username.trim().slice(0, 32);
             existing.gravatarUrl = auth.gravatarUrl;
 
-            // If the game allows reconnection, restore active status
+            // If the game allows reconnection, restore active status — unless voluntarily eliminated (forfeit)
             if (this.state.isStarted && reconnectionAllowed) {
-                existing.isEliminated = false;
-                existing.isSpectator  = false;
-                this.activeHandler?.onPlayerJoin?.(playerIdStr);
+                if (!existing.isEliminated) {
+                    // Genuine reconnect after network loss — restore active status
+                    existing.isSpectator = false;
+                    this.activeHandler?.onPlayerJoin?.(playerIdStr);
+                } else {
+                    // Was voluntarily eliminated (forfeit) — rejoin as spectator only
+                    existing.isSpectator = true;
+                }
             }
 
             // Kick old session if still alive
@@ -351,7 +356,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         const wasHost = player.isHost;
         player.isEliminated = true;
-        player.isConnected  = false;
+        // isConnected is managed exclusively by onLeave/onJoin — do not touch it here
         player.isHost       = false;
 
         // Re-elect host if needed — any connected player qualifies (host role ≠ game participation)
