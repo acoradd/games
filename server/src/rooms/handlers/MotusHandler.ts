@@ -440,7 +440,7 @@ export class MotusHandler implements GameHandler {
                         try {
                             await prisma.word.update({
                                 where: { text: wordForVote },
-                                data: { frequency: { decrement: 0.5 } },
+                                data: { frequency: { multiply: 0.5 } },
                             });
                         } catch { /* ignore */ }
                     }
