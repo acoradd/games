@@ -18,6 +18,7 @@ export const changelog: ChangelogVersion[] = [
             { date: '15/04/2026', type: 'feat', label: 'Possibilité de basculer entre joueur et spectateur en cours de partie' },
             { date: '15/04/2026', type: 'feat', label: 'Système de votes dans le lobby : muter/démuter un joueur, passer son tour, valider un mot' },
             { date: '15/04/2026', type: 'fix', label: 'Motus coop : les joueurs déconnectés et spectateurs sont correctement exclus du calcul du premier tour' },
+            { date: '15/04/2026', type: 'feat', label: 'Pseudo d\'affichage modifiable depuis les paramètres (distinct de l\'identifiant de connexion)' },
         ],
     },
     {

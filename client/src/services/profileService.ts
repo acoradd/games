@@ -35,6 +35,10 @@ export async function updateEmail(email: string | null): Promise<void> {
     await api.put("/api/profile/me/email", { email });
 }
 
+export async function updateDisplayName(displayName: string): Promise<void> {
+    await api.put("/api/profile/me/display-name", { displayName });
+}
+
 export async function fetchGameSessions(): Promise<GameSession[]> {
     const { data } = await api.get<GameSession[]>("/api/profile/me/sessions");
     return data;

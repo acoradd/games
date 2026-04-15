@@ -91,9 +91,9 @@ export default function ProfilePage() {
                 {/* Infos */}
                 {!loadingProfile && player && (
                     <section className="flex items-center gap-4">
-                        <Avatar username={player.username} gravatarUrl={player.gravatarUrl} size="lg" />
+                        <Avatar username={player.displayName} gravatarUrl={player.gravatarUrl} size="lg" />
                         <div>
-                            <p className="text-xl font-bold">{player.username}</p>
+                            <p className="text-xl font-bold">{player.displayName}</p>
                             <p className="text-sm text-gray-500">
                                 Membre depuis {new Date(player.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
                             </p>

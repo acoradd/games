@@ -50,3 +50,10 @@ export function updateStoredPlayerGravatarUrl(gravatarUrl: string | null): void 
     stored.player.gravatarUrl = gravatarUrl;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
 }
+
+export function updateStoredPlayerDisplayName(displayName: string): void {
+    const stored = getStoredPlayer();
+    if (!stored) return;
+    stored.player.displayName = displayName;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+}

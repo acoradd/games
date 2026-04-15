@@ -1,6 +1,7 @@
 export interface Player {
     id: number;
     username: string;
+    displayName: string;
     email?: string | null;
     gravatarUrl?: string | null;
     createdAt: string;

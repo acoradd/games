@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStoredPlayer, updateStoredPlayerGravatarUrl } from '../services/playerService';
-import { fetchProfile, updatePassword, updateEmail, deleteAccount } from '../services/profileService';
+import { getStoredPlayer, updateStoredPlayerGravatarUrl, updateStoredPlayerDisplayName } from '../services/playerService';
+import { fetchProfile, updatePassword, updateEmail, updateDisplayName, deleteAccount } from '../services/profileService';
 import { clearStoredPlayer } from '../services/playerService';
 import Avatar from '../components/Avatar';
 import type { Player } from '../models/Player';
@@ -25,6 +25,12 @@ export default function SettingsPage() {
     const [pwSuccess, setPwSuccess] = useState(false);
     const [pwLoading, setPwLoading] = useState(false);
 
+    // Display name
+    const [displayName, setDisplayName] = useState('');
+    const [displayNameError, setDisplayNameError] = useState<string | null>(null);
+    const [displayNameSuccess, setDisplayNameSuccess] = useState(false);
+    const [displayNameLoading, setDisplayNameLoading] = useState(false);
+
     // Delete account
     const [deleteConfirm, setDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
@@ -40,8 +46,35 @@ export default function SettingsPage() {
         fetchProfile().then((p) => {
             setPlayer(p);
             setEmail(p.email ?? '');
+            setDisplayName(p.displayName);
         });
     }, []);
+
+    async function handleDisplayNameSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setDisplayNameError(null);
+        setDisplayNameSuccess(false);
+
+        const trimmed = displayName.trim();
+        if (trimmed.length < 2) {
+            setDisplayNameError('Le pseudo doit contenir au moins 2 caractères');
+            return;
+        }
+
+        setDisplayNameLoading(true);
+        try {
+            await updateDisplayName(trimmed);
+            setDisplayNameSuccess(true);
+            setDisplayName(trimmed);
+            updateStoredPlayerDisplayName(trimmed);
+            setPlayer((p) => p ? { ...p, displayName: trimmed } : p);
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+            setDisplayNameError(msg ?? 'Une erreur est survenue');
+        } finally {
+            setDisplayNameLoading(false);
+        }
+    }
 
     async function handlePasswordSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -135,13 +168,13 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-4 mb-5">
                         {player && (
                             <Avatar
-                                username={player.username}
+                                username={player.displayName}
                                 gravatarUrl={player.gravatarUrl}
                                 size="lg"
                             />
                         )}
                         <div>
-                            <p className="text-sm font-medium text-white">{player?.username}</p>
+                            <p className="text-sm font-medium text-white">{player?.displayName}</p>
                             <p className="text-xs text-gray-500 mt-0.5">
                                 {player?.email ? player.email : 'Aucun email renseigné'}
                             </p>
@@ -177,6 +210,47 @@ export default function SettingsPage() {
                             className="self-start bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
                         >
                             {emailLoading ? 'Mise à jour…' : 'Enregistrer'}
+                        </button>
+                    </form>
+                </section>
+
+                {/* Pseudo d'affichage */}
+                <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+                    <h2 className="text-base font-semibold text-white mb-1">Pseudo d'affichage</h2>
+                    <p className="text-sm text-gray-500 mb-5">
+                        C'est ce nom qui est visible par les autres joueurs. Ton identifiant de connexion (<span className="text-gray-300">{player?.username}</span>) reste inchangé.
+                    </p>
+
+                    <form onSubmit={handleDisplayNameSubmit} className="flex flex-col gap-4 max-w-sm">
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-sm text-gray-400">Pseudo affiché</label>
+                            <input
+                                type="text"
+                                value={displayName}
+                                onChange={(e) => setDisplayName(e.target.value)}
+                                placeholder="Ton pseudo"
+                                maxLength={32}
+                                className="bg-gray-800 border border-gray-700 focus:border-indigo-500 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
+                            />
+                        </div>
+
+                        {displayNameError && (
+                            <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
+                                {displayNameError}
+                            </p>
+                        )}
+                        {displayNameSuccess && (
+                            <p className="text-emerald-400 text-sm bg-emerald-900/20 border border-emerald-800 rounded-xl px-4 py-2.5">
+                                Pseudo mis à jour.
+                            </p>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={displayNameLoading || !displayName.trim() || displayName.trim() === player?.displayName}
+                            className="self-start bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
+                        >
+                            {displayNameLoading ? 'Mise à jour…' : 'Enregistrer'}
                         </button>
                     </form>
                 </section>

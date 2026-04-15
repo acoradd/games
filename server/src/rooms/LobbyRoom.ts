@@ -19,6 +19,7 @@ interface JoinOptions {
 interface AuthPayload {
     playerId: number;
     username: string;
+    displayName: string;
     gravatarUrl: string;
 }
 
@@ -342,14 +343,15 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         const dbPlayer = await prisma.player.findUnique({
             where: { id: payload.playerId },
-            select: { email: true },
+            select: { email: true, displayName: true },
         });
         const email      = dbPlayer?.email ?? null;
         const gravatarUrl = email
             ? `https://www.gravatar.com/avatar/${createHash("md5").update(email.trim().toLowerCase()).digest("hex")}?d=retro&s=128`
             : "";
+        const displayName = dbPlayer?.displayName ?? payload.username;
 
-        return { ...payload, gravatarUrl };
+        return { ...payload, displayName, gravatarUrl };
     }
 
     onJoin(client: Client, _options: JoinOptions, auth: AuthPayload) {
@@ -365,7 +367,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
             existing.sessionId   = client.sessionId;
             existing.isConnected = true;
-            existing.username    = auth.username.trim().slice(0, 32);
+            existing.username    = auth.displayName.trim().slice(0, 32);
             existing.gravatarUrl = auth.gravatarUrl;
             if (this.state.status === "game") existing.isReady = true;
 
@@ -384,14 +386,14 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 oldClient.leave(4000);
             }
 
-            console.log(`[LobbyRoom ${this.roomId}] ${auth.username} rejoined (session updated)`);
+            console.log(`[LobbyRoom ${this.roomId}] ${auth.displayName} rejoined (session updated)`);
         } else {
             // Brand-new player — add to roster
             const isFirst = this.state.players.size === 0;
             const player  = new LobbyPlayer();
             player.id          = playerIdStr;
             player.sessionId   = client.sessionId;
-            player.username    = auth.username.trim().slice(0, 32);
+            player.username    = auth.displayName.trim().slice(0, 32);
             player.gravatarUrl = auth.gravatarUrl;
             player.isConnected = true;
             player.isHost      = isFirst;
@@ -411,7 +413,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
         this.playerIdMap.set(auth.playerId, client.sessionId);
         this.sessionToPlayerId.set(client.sessionId, auth.playerId);
-        console.log(`[LobbyRoom ${this.roomId}] ${existing?.username ?? auth.username} joined (host: ${existing?.isHost ?? this.state.players.get(playerIdStr)?.isHost}, spectator: ${existing?.isSpectator ?? this.state.players.get(playerIdStr)?.isSpectator})`);
+        console.log(`[LobbyRoom ${this.roomId}] ${existing?.username ?? auth.displayName} joined (host: ${existing?.isHost ?? this.state.players.get(playerIdStr)?.isHost}, spectator: ${existing?.isSpectator ?? this.state.players.get(playerIdStr)?.isSpectator})`);
     }
 
     async onLeave(client: Client, code: CloseCode) {

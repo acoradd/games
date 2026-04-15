@@ -22,6 +22,7 @@ export async function registerPlayer(username: string, password: string) {
     const player = await prisma.player.create({
         data: {
             username,
+            displayName: username,
             passwordHash,
         },
     });

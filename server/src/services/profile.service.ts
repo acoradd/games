@@ -13,10 +13,21 @@ const BCRYPT_ROUNDS = 10;
 export async function getProfile(playerId: number) {
     const player = await prisma.player.findUnique({
         where: { id: playerId },
-        select: { id: true, username: true, email: true, createdAt: true, lastSeenAt: true },
+        select: { id: true, username: true, displayName: true, email: true, createdAt: true, lastSeenAt: true },
     });
     if (!player) throw new Error("NOT_FOUND");
     return { ...player, gravatarUrl: gravatarUrl(player.email) };
+}
+
+export async function updateDisplayName(playerId: number, newDisplayName: string) {
+    const existing = await prisma.player.findFirst({ where: { displayName: newDisplayName } });
+    if (existing && existing.id !== playerId) {
+        throw new Error("DISPLAY_NAME_TAKEN");
+    }
+    await prisma.player.update({
+        where: { id: playerId },
+        data: { displayName: newDisplayName },
+    });
 }
 
 export async function updateEmail(playerId: number, email: string | null) {

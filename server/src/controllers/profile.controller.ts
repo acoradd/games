@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getProfile, changePassword, getGameSessions, updateEmail, deleteAccount } from "../services/profile.service.js";
+import { getProfile, changePassword, getGameSessions, updateEmail, updateDisplayName, deleteAccount } from "../services/profile.service.js";
 
 type AuthedRequest = Request & { player: { playerId: number; username: string } };
 
@@ -47,6 +47,29 @@ export async function putEmail(req: Request, res: Response) {
     } catch (err) {
         if (err instanceof Error && err.message === "INVALID_EMAIL") {
             res.status(400).json({ error: "Format d'email invalide" });
+            return;
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+}
+
+export async function putDisplayName(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    const { displayName } = req.body as { displayName?: string };
+
+    if (!displayName || typeof displayName !== "string" || displayName.trim().length === 0) {
+        res.status(400).json({ error: "displayName est requis" });
+        return;
+    }
+
+    const trimmed = displayName.trim().slice(0, 32);
+
+    try {
+        await updateDisplayName(playerId, trimmed);
+        res.json({ ok: true, displayName: trimmed });
+    } catch (err) {
+        if (err instanceof Error && err.message === "DISPLAY_NAME_TAKEN") {
+            res.status(409).json({ error: "Ce pseudo est déjà pris" });
             return;
         }
         res.status(500).json({ error: "Internal server error" });

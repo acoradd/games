@@ -28,6 +28,7 @@ model GameMode {
 model Player {
   id           Int           @id @default(autoincrement())
   username     String        @unique
+  displayName  String        @unique @map("display_name")
   passwordHash String        @map("password_hash")
   email        String?
   createdAt    DateTime      @default(now()) @map("created_at")

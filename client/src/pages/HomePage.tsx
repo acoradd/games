@@ -100,8 +100,8 @@ export default function HomePage() {
                                 onClick={() => setMenuOpen((o) => !o)}
                                 className="flex items-center gap-2.5 hover:bg-gray-800 rounded-xl px-3 py-2 transition-colors"
                             >
-                                <Avatar username={storedPlayer.player.username} gravatarUrl={storedPlayer.player.gravatarUrl ?? null} size="sm" />
-                                <span className="text-sm text-gray-300 font-medium">{storedPlayer.player.username}</span>
+                                <Avatar username={storedPlayer.player.displayName ?? storedPlayer.player.username} gravatarUrl={storedPlayer.player.gravatarUrl ?? null} size="sm" />
+                                <span className="text-sm text-gray-300 font-medium">{storedPlayer.player.displayName ?? storedPlayer.player.username}</span>
                                 <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
                             </button>
 
