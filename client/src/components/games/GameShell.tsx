@@ -1,5 +1,5 @@
 import type {Room} from '@colyseus/sdk';
-import {Crown, Eye, LogOut, Play, Send, SkipForward, Trophy, WifiOff, X} from 'lucide-react';
+import {Crown, Eye, Flag, LogOut, Play, Send, SkipForward, Trophy, WifiOff, X} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import type {ChatMsg, GenericGameState, LobbyPlayer, LobbyState} from '../../models/Lobby';
 import Avatar from '../Avatar';
@@ -33,6 +33,8 @@ interface Props {
     overlayTopContent?: React.ReactNode;
     /** Whether to show the forfeit button for the local player (default true) */
     canForfeit?: boolean;
+    /** Whether spectators can join as players and players can switch to spectator (default false) */
+    canToggleSpectator?: boolean;
 }
 
 export default function GameShell({
@@ -40,7 +42,7 @@ export default function GameShell({
     genericState, players, sessionId,
     header, children, gameScrollable = false,
     containerRef, onTabChange, scoreboardFooter, overlayTopContent,
-    canForfeit = true,
+    canForfeit = true, canToggleSpectator = false,
 }: Props) {
     const {
         phase, playerOrder, playerNames, roundPoints, roundWinnerIds,
@@ -48,15 +50,17 @@ export default function GameShell({
         roundWinnerSubtitle, preserveOrder = false,
     } = genericState;
 
-    const isHost         = players.find((p) => p.id === sessionId)?.isHost ?? false;
-    const spectatorCount = players.filter((p) => p.isSpectator).length;
-    const playerById     = new Map(players.map((p) => [p.id, p]));
+    const isHost     = players.find((p) => p.id === sessionId)?.isHost ?? false;
+    const playerById = new Map(players.map((p) => [p.id, p]));
 
     const myPlayer      = players.find((p) => p.id === sessionId);
     const myIsElim      = myPlayer?.isEliminated ?? false;
     const myIsSpectator = myPlayer?.isSpectator  ?? false;
-    const showForfeit   = canForfeit && phase === "playing" && !myIsElim && !myIsSpectator;
-    const showForceEnd  = isHost && (phase === "playing" || phase === "roundEnd");
+    const showForfeit        = canForfeit && phase === "playing" && !myIsElim && !myIsSpectator;
+    const showForceEndRound  = isHost && phase === "playing";
+    const showForceReturn    = isHost && (phase === "playing" || phase === "roundEnd");
+    const showJoinAsPlayer   = canToggleSpectator && myIsSpectator && !myIsElim && phase === "playing";
+    const showGoSpectator    = canToggleSpectator && !myIsSpectator && !myIsElim && phase === "playing";
 
     const [mobileTab,  setMobileTab]  = useState<"jeu" | "scores" | "chat">("jeu");
     const [chatInput,  setChatInput]  = useState("");
@@ -171,11 +175,30 @@ export default function GameShell({
                     );
                 })}
             </ul>
-            {spectatorCount > 0 && (
-                <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
-                    <Eye className="w-3 h-3" />
-                    <span>{spectatorCount} spectateur{spectatorCount > 1 ? "s" : ""}</span>
-                </p>
+            {players.some((p) => p.isSpectator) && (
+                <div className="mt-3 border-t border-gray-800 pt-3">
+                    <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-2 flex items-center gap-1">
+                        <Eye className="w-3 h-3" />
+                        Spectateurs
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                        {players.filter((p) => p.isSpectator).map((p) => {
+                            const isMe = p.id === sessionId;
+                            return (
+                                <li key={p.id} className="flex items-center gap-2 text-sm text-gray-500">
+                                    <div className="relative shrink-0">
+                                        <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
+                                        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${p.isConnected ? "bg-emerald-400" : "bg-gray-600"}`} />
+                                    </div>
+                                    <span className="truncate">
+                                        {p.username}
+                                        {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
             )}
         </>
     );
@@ -264,22 +287,56 @@ export default function GameShell({
                             ? scoreboardFooter((label, action) => setConfirm({ label, action }))
                             : scoreboardFooter}
 
-                        {/* Forfeit / force-end buttons */}
-                        {(showForfeit || showForceEnd) && (
+                        {/* Boutons joueur */}
+                        {(showJoinAsPlayer || showGoSpectator || showForfeit) && (
                             <div className="mt-3 border-t border-gray-800 pt-3 flex flex-col gap-2">
+                                {showJoinAsPlayer && (
+                                    <button
+                                        onClick={() => room.send("spectator:set", { spectator: false })}
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-emerald-400 border border-gray-800 hover:border-emerald-900/60 rounded-lg py-1.5 transition-colors"
+                                    >
+                                        <Play className="w-3 h-3" />
+                                        Rejoindre la partie
+                                    </button>
+                                )}
+                                {showGoSpectator && (
+                                    <button
+                                        onClick={() => setConfirm({ label: "Passer en mode spectateur ?", action: () => room.send("spectator:set", { spectator: true }) })}
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-sky-400 border border-gray-800 hover:border-sky-900/60 rounded-lg py-1.5 transition-colors"
+                                    >
+                                        <Eye className="w-3 h-3" />
+                                        Passer spectateur
+                                    </button>
+                                )}
                                 {showForfeit && (
                                     <button
                                         onClick={() => setConfirm({ label: "Déclarer forfait ?", action: () => room.send("forfeit") })}
-                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/60 rounded-lg py-1.5 transition-colors"
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-amber-400 border border-gray-800 hover:border-amber-900/60 rounded-lg py-1.5 transition-colors"
                                     >
                                         <LogOut className="w-3 h-3" />
                                         Déclarer forfait
                                     </button>
                                 )}
-                                {showForceEnd && (
+                            </div>
+                        )}
+
+                        {/* Boutons host */}
+                        {(showForceEndRound || showForceReturn) && (
+                            <div className="mt-3 border-t border-gray-800 pt-3 flex flex-col gap-2">
+                                <p className="text-xs uppercase tracking-widest text-gray-600 font-semibold mb-1">Hôte</p>
+                                {showForceEndRound && (
+                                    <button
+                                        onClick={() => setConfirm({ label: "Terminer la manche en cours ?", action: () => room.send("forceEndRound") })}
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-orange-400 border border-gray-800 hover:border-orange-900/60 rounded-lg py-1.5 transition-colors"
+                                    >
+                                        <Flag className="w-3 h-3" />
+                                        Terminer la manche
+                                    </button>
+                                )}
+                                {showForceReturn && (
                                     <button
                                         onClick={() => setConfirm({ label: "Terminer la partie et revenir au lobby ?", action: () => room.send("forceReturnToLobby") })}
-                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-orange-400 border border-gray-800 hover:border-orange-900/60 rounded-lg py-1.5 transition-colors"
+                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/60 rounded-lg py-1.5 transition-colors"
                                     >
                                         <SkipForward className="w-3 h-3" />
                                         Terminer la partie

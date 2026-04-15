@@ -410,14 +410,6 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                     })}
                 </div>
             )}
-            {isHost && mode === "coop" && phase === "playing" && (
-                <button
-                    onClick={() => openConfirm("Terminer la manche ?", () => room.send("forceEndRound"))}
-                    className="mt-4 w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded-lg py-1.5 transition-colors"
-                >
-                    Terminer la manche
-                </button>
-            )}
         </>
     );
 
@@ -439,6 +431,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
             players={players}
             sessionId={sessionId}
             gameScrollable
+            canToggleSpectator
             scoreboardFooter={scoreboardFooter}
             overlayTopContent={overlayTopContent}
             header={

@@ -175,6 +175,25 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.eliminatePlayer(playerIdStr);
         });
 
+        this.onMessage("spectator:set", (client: Client, data: { spectator: boolean }) => {
+            if (this.state.status !== "game") return;
+            if (!this.activeHandler?.allowsReconnection?.()) return;
+            const playerIdStr = this.getPlayerIdStr(client.sessionId);
+            if (!playerIdStr) return;
+            const player = this.state.players.get(playerIdStr);
+            if (!player || player.isEliminated) return;
+
+            if (data.spectator && !player.isSpectator) {
+                // Active player → spectator (soft exit from game)
+                player.isSpectator = true;
+                this.activeHandler.onPlayerDisconnect?.(playerIdStr);
+            } else if (!data.spectator && player.isSpectator) {
+                // Spectator → active player
+                player.isSpectator = false;
+                this.activeHandler.onPlayerJoin?.(playerIdStr);
+            }
+        });
+
         // ── Game-specific messages → delegate to active handler ───────────────
         const gameMsgs = [
             "flipCard",
@@ -231,17 +250,14 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             existing.isConnected = true;
             existing.username    = auth.username.trim().slice(0, 32);
             existing.gravatarUrl = auth.gravatarUrl;
+            if (this.state.status === "game") existing.isReady = true;
 
-            // If the game allows reconnection, restore active status — unless voluntarily eliminated (forfeit)
-            if (this.state.isStarted && reconnectionAllowed) {
-                if (!existing.isEliminated) {
-                    // Genuine reconnect after network loss — restore active status
-                    existing.isSpectator = false;
-                    this.activeHandler?.onPlayerJoin?.(playerIdStr);
-                } else {
-                    // Was voluntarily eliminated (forfeit) — rejoin as spectator only
-                    existing.isSpectator = true;
-                }
+            if (this.state.isStarted
+                && reconnectionAllowed
+                && !existing.isEliminated
+                && !existing.isSpectator
+            ) {
+                this.activeHandler?.onPlayerJoin?.(playerIdStr);
             }
 
             // Kick old session if still alive
@@ -264,16 +280,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             player.isHost      = isFirst;
             player.isReady     = false;
             player.isEliminated = false;
-            // Spectator only if game is running AND the game doesn't allow mid-game joins
-            player.isSpectator  = this.state.status === "game" && !reconnectionAllowed;
-            if (this.state.status === "game") player.isReady = true;
+            // Spectator only if game is running
+            player.isSpectator  = this.state.isStarted;
             if (isFirst) this.state.hostId = playerIdStr;
-            this.state.players.set(playerIdStr, player);
 
             // Notify handler of new participant
-            if (this.state.isStarted && reconnectionAllowed) {
-                this.activeHandler?.onPlayerJoin?.(playerIdStr);
+            if (this.state.isStarted) {
+                player.isReady = true;
             }
+
+            this.state.players.set(playerIdStr, player);
         }
 
         this.playerIdMap.set(auth.playerId, client.sessionId);
@@ -311,6 +327,19 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                     }
                 }
             } else {
+                const wasHost = leaving.isHost;
+                leaving.isHost       = false;
+
+                // Re-elect host if needed — any connected player qualifies (host role ≠ game participation)
+                if (wasHost) {
+                    const next = [...this.state.players.entries()]
+                        .find(([id, p]) => id !== playerIdStr && p.isConnected);
+                    if (next) {
+                        next[1].isHost    = true;
+                        this.state.hostId = next[0];
+                    }
+                }
+
                 this.eliminatePlayer(playerIdStr);
             }
         } else if (!this.state.isStarted) {
@@ -354,20 +383,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         const player = this.state.players.get(playerIdStr);
         if (!player) return;
 
-        const wasHost = player.isHost;
         player.isEliminated = true;
-        // isConnected is managed exclusively by onLeave/onJoin — do not touch it here
-        player.isHost       = false;
-
-        // Re-elect host if needed — any connected player qualifies (host role ≠ game participation)
-        if (wasHost) {
-            const next = [...this.state.players.entries()]
-                .find(([id, p]) => id !== playerIdStr && p.isConnected);
-            if (next) {
-                next[1].isHost    = true;
-                this.state.hostId = next[0];
-            }
-        }
 
         if (this.state.status === "game" && this.activeHandler) {
             this.activeHandler.onEliminate(playerIdStr);

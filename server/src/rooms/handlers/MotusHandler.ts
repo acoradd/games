@@ -228,8 +228,11 @@ export class MotusHandler implements GameHandler {
         // Add to game state if brand new
         if (!gs.players[playerId]) {
             gs.players[playerId] = { guesses: [], solved: false, solvedAt: 0, eliminated: false };
-            gs.playerOrder.push(playerId);
             this.vsGuesses.set(playerId, []);
+        }
+        // (Re-)insert into playerOrder if not present (new player or returning from spectator)
+        if (!gs.playerOrder.includes(playerId)) {
+            gs.playerOrder.push(playerId);
         }
 
         this.ctx.setState(JSON.stringify(gs));
@@ -241,16 +244,24 @@ export class MotusHandler implements GameHandler {
         catch { return; }
         if (gs.phase !== "playing") return;
 
+        // If the player switched to spectator (still connected), remove them from
+        // playerOrder so they no longer appear in the scoreboard — their stats in
+        // gs.players / gs.roundPoints are preserved for if they come back.
+        const lp = this.ctx.getPlayers().get(playerId);
+        if (lp?.isSpectator) {
+            gs.playerOrder = gs.playerOrder.filter(id => id !== playerId);
+        }
+
         if (gs.mode === "coop") {
             // Advance turn if it was the disconnected player's turn
             if (gs.currentTurnId === playerId) {
                 gs.currentTurnId = this.nextCoopPlayer(gs);
             }
-            // End round if no connected players remain
+            // End round if no connected, non-spectator players remain
             const activeCount = gs.playerOrder.filter(id => {
                 const p  = gs.players[id];
-                const lp = this.ctx.getPlayers().get(id);
-                return p && !p.eliminated && lp && !lp.isEliminated && lp.isConnected;
+                const lp2 = this.ctx.getPlayers().get(id);
+                return p && !p.eliminated && lp2 && !lp2.isEliminated && lp2.isConnected && !lp2.isSpectator;
             }).length;
             if (activeCount === 0) this.endRound(gs, null);
         } else {
@@ -277,6 +288,8 @@ export class MotusHandler implements GameHandler {
 
         const player = gs.players[playerId];
         if (!player || player.eliminated) return;
+        const lp = this.ctx.getPlayers().get(playerId);
+        if (lp?.isSpectator) return;
         if (gs.mode === "coop" && playerId !== gs.currentTurnId) return;
         if (gs.mode === "vs" && player.solved) return;
 
@@ -389,13 +402,13 @@ export class MotusHandler implements GameHandler {
         }
     }
 
-    /** VS: returns true if every connected, non-eliminated player is done. */
+    /** VS: returns true if every connected, non-eliminated, non-spectator player is done. */
     private allConnectedDone(gs: MotusGameState): boolean {
         return gs.playerOrder.every(id => {
             const p  = gs.players[id];
             if (!p || p.eliminated) return true;
             const lp = this.ctx.getPlayers().get(id);
-            if (!lp || !lp.isConnected) return true;   // disconnected → skip
+            if (!lp || !lp.isConnected || lp.isSpectator) return true;   // disconnected or spectator → skip
             return this.isPlayerDone(gs, id);
         });
     }
@@ -417,7 +430,7 @@ export class MotusHandler implements GameHandler {
         const active = gs.playerOrder.filter(id => {
             const p  = gs.players[id];
             const lp = this.ctx.getPlayers().get(id);
-            return p && !p.eliminated && lp && !lp.isEliminated && lp.isConnected;
+            return p && !p.eliminated && lp && !lp.isEliminated && lp.isConnected && !lp.isSpectator;
         });
         if (active.length === 0) return gs.currentTurnId;
         const idx = active.indexOf(gs.currentTurnId);
