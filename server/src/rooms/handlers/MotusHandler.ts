@@ -136,6 +136,12 @@ export class MotusHandler implements GameHandler {
             playerOrder = playerIds;
         }
 
+        // For coop, skip disconnected/spectator players when picking the first turn
+        const firstCoopTurn = playerOrder.find(id => {
+            const lp = this.ctx.getPlayers().get(id);
+            return lp && lp.isConnected && !lp.isEliminated && !lp.isSpectator;
+        }) ?? playerOrder[0] ?? "";
+
         const now = Date.now();
         const gs: MotusGameState = {
             phase: "playing",
@@ -148,7 +154,7 @@ export class MotusHandler implements GameHandler {
             players,
             playerOrder,
             sharedGuesses:  [],
-            currentTurnId:  playerOrder[0] ?? "",
+            currentTurnId:  mode === "coop" ? firstCoopTurn : (playerOrder[0] ?? ""),
             playerNames,
             playerAvatars,
             currentRound,
