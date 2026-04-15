@@ -1,10 +1,10 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Clipboard, Check, Link, Send, X, WifiOff, Plus, Loader2, Crown} from 'lucide-react';
+import {Clipboard, Check, Link, Send, X, WifiOff, Plus, Loader2, Crown, VolumeX} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
-import type {ChatMsg, LobbyPlayer, LobbyState} from '../models/Lobby';
+import type {ChatMsg, LobbyPlayer, LobbyState, VoteState} from '../models/Lobby';
 import {getGameModes} from '../services/gameModeService';
 import {joinLobby} from '../services/lobbyService';
 import {getStoredPlayer} from '../services/playerService';
@@ -84,6 +84,20 @@ function GameOptions({
     );
 }
 
+// ── VoteTimer ─────────────────────────────────────────────────────────────────
+function VoteTimer({ deadline }: { deadline: number }) {
+    const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    useEffect(() => {
+        const iv = setInterval(() => {
+            const r = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+            setRemaining(r);
+            if (r <= 0) clearInterval(iv);
+        }, 500);
+        return () => clearInterval(iv);
+    }, [deadline]);
+    return <span className="shrink-0 text-xs tabular-nums text-gray-500">{remaining}s</span>;
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 export default function LobbyPage() {
     const {roomId = ''} = useParams<{ roomId: string }>();
@@ -111,6 +125,7 @@ export default function LobbyPage() {
     const [unreadChat, setUnreadChat] = useState(0);
     const mobileTabRef = useRef(mobileTab);
     useEffect(() => { mobileTabRef.current = mobileTab; }, [mobileTab]);
+    const [activeVote, setActiveVote] = useState<VoteState | null>(null);
 
     const isHost = myPlayerId !== '' && myPlayerId === hostId;
     const selectedGame = gameModes.find((g) => g.slug === selectedSlug) ?? null;
@@ -131,7 +146,7 @@ export default function LobbyPage() {
                         id: p.id, sessionId: p.sessionId ?? '', username: p.username, gravatarUrl: p.gravatarUrl ?? '',
                         isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                        isSpectator: p.isSpectator ?? false
+                        isSpectator: p.isSpectator ?? false, isMuted: p.isMuted ?? false
                     })
                 );
             } else {
@@ -141,7 +156,7 @@ export default function LobbyPage() {
                         id: p.id, sessionId: p.sessionId ?? '', username: p.username, gravatarUrl: p.gravatarUrl ?? '',
                         isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                        isSpectator: p.isSpectator ?? false
+                        isSpectator: p.isSpectator ?? false, isMuted: p.isMuted ?? false
                     })
                 );
             }
@@ -198,6 +213,24 @@ export default function LobbyPage() {
 
                 roomRef.current = room;
                 setCurrentRoom(room);
+
+                // Vote events
+                room.onMessage("vote:start", (data: Omit<VoteState, 'myChoice'>) => {
+                    setActiveVote({ ...data, myChoice: null });
+                });
+                room.onMessage("vote:update", (data: { voteId: string; yesCount: number; noCount: number }) => {
+                    setActiveVote(prev => prev && prev.voteId === data.voteId
+                        ? { ...prev, yesCount: data.yesCount, noCount: data.noCount }
+                        : prev);
+                });
+                room.onMessage("vote:queued", (data: { queueLength: number }) => {
+                    setActiveVote(prev => prev ? { ...prev, queueLength: data.queueLength } : prev);
+                });
+                room.onMessage("vote:end", () => setActiveVote(null));
+                room.onMessage("vote:cancel", () => setActiveVote(null));
+
+                // Ask server to replay current vote state (in case we navigated here mid-vote)
+                room.send("vote:sync");
 
                 const fromReturnToLobby = (location.state as Record<string, unknown> | null)?.fromReturnToLobby === true;
 
@@ -306,6 +339,16 @@ export default function LobbyPage() {
 
     function handleKick(playerId: string) {
         roomRef.current?.send('kick', {playerId});
+    }
+
+    function castVote(choice: boolean) {
+        if (!activeVote || activeVote.myChoice !== null) return;
+        roomRef.current?.send("vote:cast", { voteId: activeVote.voteId, choice });
+        setActiveVote(prev => prev ? { ...prev, myChoice: choice } : null);
+    }
+
+    function initiateVote(type: 'mute_player' | 'unmute_player', targetPlayerId: string) {
+        roomRef.current?.send("vote:initiate", { type, targetPlayerId });
     }
 
     async function handleCopy(type: 'code' | 'link') {
@@ -527,41 +570,55 @@ export default function LobbyPage() {
                             Joueurs ({players.length})
                         </p>
                         <ul className="flex flex-col gap-2">
-                            {players.map((p) => (
-                                <li key={p.id} className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <div className="relative shrink-0">
-                                            <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
-                                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${p.isReady ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                                            {p.isHost && (
-                                                <span className="absolute -top-1 -left-1 bg-gray-950 rounded-full p-0.5">
-                                                    <Crown className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                                                </span>
+                            {players.map((p) => {
+                                const isMe = p.id === myPlayerId;
+                                return (
+                                    <li key={p.id} className="group flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="relative shrink-0">
+                                                <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
+                                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${p.isReady ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                                                {p.isHost && (
+                                                    <span className="absolute -top-1 -left-1 bg-gray-950 rounded-full p-0.5">
+                                                        <Crown className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="text-sm font-medium truncate">
+                                                {p.username}
+                                                {isMe && (
+                                                    <span className="text-gray-600 text-xs ml-1">(vous)</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-xs shrink-0">
+                                            <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
+                                                {p.isReady ? 'prêt' : 'attente'}
+                                            </span>
+                                            {!isMe && (
+                                                <button
+                                                    onClick={() => initiateVote(p.isMuted ? 'unmute_player' : 'mute_player', p.id)}
+                                                    title={p.isMuted ? "Voter pour débloquer le chat" : "Voter pour bloquer le chat"}
+                                                    className={p.isMuted
+                                                        ? "text-red-500 hover:text-emerald-400 transition-colors"
+                                                        : "opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"}
+                                                >
+                                                    <VolumeX className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                            {isHost && !isMe && (
+                                                <button
+                                                    onClick={() => handleKick(p.id)}
+                                                    title="Expulser"
+                                                    className="text-gray-600 hover:text-red-400 transition-colors"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
                                             )}
                                         </div>
-                                        <span className="text-sm font-medium truncate">
-                                            {p.username}
-                                            {p.id === myPlayerId && (
-                                                <span className="text-gray-600 text-xs ml-1">(vous)</span>
-                                            )}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                        <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
-                                            {p.isReady ? 'prêt' : 'attente'}
-                                        </span>
-                                        {isHost && p.id !== myPlayerId && (
-                                            <button
-                                                onClick={() => handleKick(p.id)}
-                                                title="Expulser"
-                                                className="ml-1 text-gray-600 hover:text-red-400 transition-colors"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </li>
-                            ))}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </div>
 
@@ -569,22 +626,94 @@ export default function LobbyPage() {
                     <div className={`flex-1 flex flex-col min-h-0 ${mobileTab === 'joueurs' ? 'hidden lg:flex' : ''}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2">Chat</p>
 
+                        {/* Vote panel */}
+                        {activeVote && (
+                            <div className="mx-3 mb-2 rounded-xl border border-indigo-800/60 bg-indigo-950/60 p-3 flex flex-col gap-2 shrink-0">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                        <p className="text-xs font-semibold text-indigo-200 leading-snug">{activeVote.question}</p>
+                                        {activeVote.queueLength > 0 && (
+                                            <p className="text-[10px] text-indigo-400/70">{activeVote.queueLength} en attente</p>
+                                        )}
+                                    </div>
+                                    <VoteTimer deadline={activeVote.deadline} />
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                    <span className="text-emerald-400 font-semibold">{activeVote.yesCount}</span>
+                                    <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
+                                        {activeVote.yesCount + activeVote.noCount > 0 && (
+                                            <div
+                                                className="h-full bg-emerald-500 transition-all"
+                                                style={{ width: `${(activeVote.yesCount / (activeVote.yesCount + activeVote.noCount)) * 100}%` }}
+                                            />
+                                        )}
+                                    </div>
+                                    <span className="text-red-400 font-semibold">{activeVote.noCount}</span>
+                                </div>
+                                {activeVote.targetPlayerId === myPlayerId ? (
+                                    <p className="text-xs text-gray-500 text-center italic">Vous êtes concerné par ce vote.</p>
+                                ) : activeVote.myChoice === null ? (
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => castVote(true)}
+                                            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-800/60 transition-colors"
+                                        >
+                                            {activeVote.yesLabel}
+                                        </button>
+                                        <button
+                                            onClick={() => castVote(false)}
+                                            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-900/40 hover:bg-red-900/70 text-red-300 border border-red-900/60 transition-colors"
+                                        >
+                                            {activeVote.noLabel}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-500 text-center">
+                                        Vote envoyé : <span className={activeVote.myChoice ? "text-emerald-400" : "text-red-400"}>
+                                            {activeVote.myChoice ? activeVote.yesLabel : activeVote.noLabel}
+                                        </span>
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
                             {chatMessages.length === 0 && (
                                 <p className="text-gray-700 text-xs text-center mt-4">Aucun message.</p>
                             )}
                             {chatMessages.map((msg, i) => {
                                 const isMine = msg.username === players.find((p) => p.id === myPlayerId)?.username;
-                                const sender = players.find((p) => p.username === msg.username);
+                                const sender = !isMine ? players.find((p) => p.username === msg.username && p.id !== myPlayerId) : undefined;
                                 return (
-                                    <div key={i} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'} items-end`}>
+                                    <div key={i} className={`group flex gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'} items-end`}>
                                         {!isMine && (
                                             <div className="shrink-0 mb-0.5">
                                                 <Avatar username={msg.username} gravatarUrl={sender?.gravatarUrl || null} size="sm" />
                                             </div>
                                         )}
                                         <div className={`flex flex-col gap-0.5 max-w-[80%] ${isMine ? 'items-end' : 'items-start'}`}>
-                                            {!isMine && <span className="text-xs text-gray-500 px-1">{msg.username}</span>}
+                                            {!isMine && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-xs text-gray-500 px-1">{msg.username}</span>
+                                                    {sender && (sender.isMuted ? (
+                                                        <button
+                                                            onClick={() => initiateVote('unmute_player', sender.id)}
+                                                            className="text-red-500 hover:text-emerald-400 transition-colors"
+                                                            title="Voter pour débloquer le chat"
+                                                        >
+                                                            <VolumeX className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => initiateVote('mute_player', sender.id)}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"
+                                                            title="Voter pour bloquer le chat"
+                                                        >
+                                                            <VolumeX className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                             <div className={`px-3 py-1.5 rounded-2xl text-sm break-words ${
                                                 isMine
                                                     ? 'bg-indigo-600 text-white rounded-tr-sm'
@@ -599,6 +728,12 @@ export default function LobbyPage() {
                             <div ref={chatEndRef}/>
                         </div>
 
+                        {me?.isMuted ? (
+                            <div className="flex items-center justify-center gap-2 p-3 border-t border-gray-800 shrink-0">
+                                <VolumeX className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                <span className="text-xs text-gray-500">Votre chat est bloqué.</span>
+                            </div>
+                        ) : (
                         <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-gray-800">
                             <input
                                 type="text"
@@ -617,6 +752,7 @@ export default function LobbyPage() {
                                 <Send className="w-4 h-4" />
                             </button>
                         </form>
+                        )}
                     </div>
                 </aside>
             </div>

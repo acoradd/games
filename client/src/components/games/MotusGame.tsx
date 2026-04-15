@@ -228,7 +228,6 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         roundPoints, roundWinnerIds, roundStartedAt,
     } = gameState;
 
-    const isHost   = players.find((p) => p.id === sessionId)?.isHost ?? false;
     const myState  = gsPlayers[sessionId];
     const isMyTurn = mode === "coop" ? sessionId === currentTurnId : true;
 
@@ -370,7 +369,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         preserveOrder: mode === "coop",
     };
 
-    // ── Scoreboard footer (VS guess dots + coop force-end) ─────────────────
+    // ── Scoreboard footer (VS guess dots + coop vote skip turn) ───────────────
     const scoreboardFooter = (openConfirm: (label: string, action: () => void) => void) => (
         <>
             {mode === "vs" && phase === "playing" && (
@@ -408,6 +407,19 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                             </div>
                         );
                     })}
+                </div>
+            )}
+            {mode === "coop" && phase === "playing" && gameState.currentTurnId && gameState.currentTurnId !== sessionId && (
+                <div className="mt-3 border-t border-gray-800 pt-3">
+                    <button
+                        onClick={() => openConfirm(
+                            `Voter pour passer le tour de ${playerNames[gameState.currentTurnId] ?? "ce joueur"} ?`,
+                            () => room.send("vote:initiate", { type: "skip_turn", targetPlayerId: gameState.currentTurnId })
+                        )}
+                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-sky-400 border border-gray-800 hover:border-sky-900/60 rounded-lg py-1.5 transition-colors"
+                    >
+                        Voter pour passer le tour
+                    </button>
                 </div>
             )}
         </>

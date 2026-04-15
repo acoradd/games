@@ -362,6 +362,26 @@ export class MotusHandler implements GameHandler {
         this.ctx.setState(JSON.stringify(gs));
     }
 
+    skipTurn(targetPlayerId: string): void {
+        let gs: MotusGameState;
+        try { gs = JSON.parse(this.ctx.getState()) as MotusGameState; }
+        catch { return; }
+        if (gs.phase !== "playing" || gs.mode !== "coop") return;
+
+        if (gs.currentTurnId === targetPlayerId) {
+            gs.currentTurnId = this.nextCoopPlayer(gs);
+        }
+
+        const activeCount = gs.playerOrder.filter(id => {
+            const p  = gs.players[id];
+            const lp = this.ctx.getPlayers().get(id);
+            return p && !p.eliminated && lp && !lp.isEliminated && lp.isConnected && !lp.isSpectator;
+        }).length;
+        if (activeCount === 0) this.endRound(gs, null);
+
+        this.ctx.setState(JSON.stringify(gs));
+    }
+
     private endRound(gs: MotusGameState, coopWinnerId: string | null): void {
         this.roundTimer?.clear();
         this.roundTimer = null;
@@ -389,6 +409,37 @@ export class MotusHandler implements GameHandler {
         if (gs.roundWinnerIds.length === 1) {
             const wId = gs.roundWinnerIds[0]!;
             gs.roundPoints[wId] = (gs.roundPoints[wId] ?? 0) + 1;
+        }
+
+        // Vote on word quality (always, regardless of round outcome)
+        const wordForVote = this.secret;
+        const eligibleVoters = gs.playerOrder.filter(id => {
+            const lp = this.ctx.getPlayers().get(id);
+            return lp && !lp.isEliminated && lp.isConnected;
+        });
+        if (eligibleVoters.length > 0) {
+            this.ctx.startVote(
+                {
+                    type: "word_quality",
+                    question: `Le mot "${wordForVote}" était-il approprié ?`,
+                    yesLabel: "Oui",
+                    noLabel: "Non",
+                    resultMessage: (r) => r.passed
+                        ? `Le mot "${wordForVote}" est validé`
+                        : `Le mot "${wordForVote}" a été signalé comme inapproprié`,
+                },
+                eligibleVoters,
+                async (result) => {
+                    if (!result.passed) {
+                        try {
+                            await prisma.word.update({
+                                where: { text: wordForVote },
+                                data: { frequency: { decrement: 0.5 } },
+                            });
+                        } catch { /* ignore */ }
+                    }
+                },
+            );
         }
 
         gs.phase = gs.currentRound >= gs.maxRounds ? "ended" : "roundEnd";

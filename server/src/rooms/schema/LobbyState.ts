@@ -16,6 +16,7 @@ export class LobbyPlayer extends Schema {
     @type("boolean") isConnected: boolean = true;
     @type("boolean") isEliminated: boolean = false;
     @type("boolean") isSpectator: boolean = false;
+    @type("boolean") isMuted: boolean = false;
 }
 
 export class LobbyState extends Schema {

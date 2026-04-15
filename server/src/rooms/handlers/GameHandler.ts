@@ -1,5 +1,6 @@
 import type { MapSchema } from "@colyseus/schema";
 import type { LobbyPlayer } from "../schema/LobbyState.js";
+import type { VoteConfig, VoteResult } from "../types/vote.js";
 
 // ── Round carry-over between rounds of the same game session ──────────────────
 export interface RoundCarryOver {
@@ -33,6 +34,8 @@ export interface RoomContext {
     getPlayerDbId(playerId: string): string | undefined;
     /** Called by the handler when the game (all rounds) has ended. */
     onGameEnded(roundPoints: Record<string, number>, winners?: string[]): void;
+    /** Start a vote session visible to all clients. */
+    startVote(config: VoteConfig, eligiblePlayerIds: string[], onEnd: (result: VoteResult) => void): void;
 }
 
 // ── Interface every game handler must implement ───────────────────────────────
@@ -80,4 +83,10 @@ export interface GameHandler {
      * Called before the handler is replaced (nextRound or returnToLobby).
      */
     dispose(): void;
+
+    /**
+     * Skip the current turn for the given player (vote result).
+     * Only implemented by handlers that support turn-skipping (e.g. Motus coop).
+     */
+    skipTurn?(targetPlayerId: string): void;
 }

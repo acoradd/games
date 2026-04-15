@@ -8,6 +8,7 @@ export interface LobbyPlayer {
     isConnected: boolean;
     isEliminated: boolean;
     isSpectator: boolean;
+    isMuted: boolean;
 }
 
 export interface ChatMsg {
@@ -147,6 +148,26 @@ export interface MotusPlayerState {
     solved:     boolean;
     solvedAt:   number;
     eliminated: boolean;
+}
+
+// ── Vote system ────────────────────────────────────────────────────────────
+
+export type VoteType = 'word_quality' | 'skip_turn' | 'mute_player' | 'unmute_player';
+
+export interface VoteState {
+    voteId: string;
+    type: VoteType;
+    question: string;
+    yesLabel: string;
+    noLabel: string;
+    targetPlayerId?: string;
+    targetUsername?: string;
+    deadline: number;
+    yesCount: number;
+    noCount: number;
+    eligibleCount: number;
+    myChoice: boolean | null; // null = not yet voted
+    queueLength: number;      // votes waiting after the current one
 }
 
 export interface MotusGameState {
