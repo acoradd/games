@@ -5,6 +5,7 @@ import { fetchProfile, updatePassword, updateEmail, updateDisplayName, deleteAcc
 import { clearStoredPlayer } from '../services/playerService';
 import Avatar from '../components/Avatar';
 import type { Player } from '../models/Player';
+import { useNotifications } from '../hooks/useNotifications';
 
 export default function SettingsPage() {
     const navigate = useNavigate();
@@ -30,6 +31,9 @@ export default function SettingsPage() {
     const [displayNameError, setDisplayNameError] = useState<string | null>(null);
     const [displayNameSuccess, setDisplayNameSuccess] = useState(false);
     const [displayNameLoading, setDisplayNameLoading] = useState(false);
+
+    // Delete account
+    const { supported: notifSupported, permission, enabled: notifEnabled, enable: enableNotif, disable: disableNotif } = useNotifications();
 
     // Delete account
     const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -314,6 +318,38 @@ export default function SettingsPage() {
                             {pwLoading ? 'Mise à jour…' : 'Mettre à jour'}
                         </button>
                     </form>
+                </section>
+
+                {/* Notifications */}
+                <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+                    <h2 className="text-base font-semibold text-white mb-1">Notifications</h2>
+                    <p className="text-sm text-gray-500 mb-5">
+                        Reçois une notification système quand c'est ton tour, même si tu n'es pas sur l'onglet.
+                    </p>
+
+                    {!notifSupported ? (
+                        <p className="text-sm text-gray-500">Ton navigateur ne supporte pas les notifications.</p>
+                    ) : permission === 'denied' ? (
+                        <p className="text-sm text-amber-400 bg-amber-900/20 border border-amber-800 rounded-xl px-4 py-2.5">
+                            Les notifications sont bloquées par le navigateur. Modifie les permissions du site dans les paramètres de ton navigateur pour les activer.
+                        </p>
+                    ) : (
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={notifEnabled ? disableNotif : () => enableNotif()}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                                    notifEnabled ? 'bg-indigo-600' : 'bg-gray-700'
+                                }`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    notifEnabled ? 'translate-x-6' : 'translate-x-1'
+                                }`} />
+                            </button>
+                            <span className="text-sm text-gray-300">
+                                {notifEnabled ? 'Activées' : 'Désactivées'}
+                            </span>
+                        </div>
+                    )}
                 </section>
 
                 {/* Suppression du compte */}

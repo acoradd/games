@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Room } from "@colyseus/sdk";
 import type { LobbyPlayer, LobbyState, MemoryCard, MemoryGameState, ChatMsg, GenericGameState } from "../../models/Lobby";
 import GameShell from "./GameShell";
+import { useNotifications } from "../../hooks/useNotifications";
+import NotificationBanner from "../NotificationBanner";
 
 const SYMBOLS = [
     "🎮","🎲","🎯","⚽","🏀","🎾","🏆","🚀","🌟","🎪",
@@ -43,6 +45,25 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
     const { phase, currentTurnId, cards, scores, turnDeadline, playerNames } = gameState;
     const isMyTurn    = sessionId === currentTurnId;
     const canInteract = isMyTurn && phase !== "revealing" && phase !== "ended" && phase !== "roundEnd";
+
+    // Notifications
+    const { notify, alreadyAsked, requestAndEnable, permission, supported: notifSupported } = useNotifications();
+    const [showNotifBanner, setShowNotifBanner] = useState(false);
+    const prevTurnIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        const isActive = phase === "picking1" || phase === "picking2" || phase === "revealing";
+        if (isActive && !alreadyAsked && notifSupported && permission !== 'denied') {
+            setShowNotifBanner(true);
+        }
+    }, [phase]);
+
+    useEffect(() => {
+        if (prevTurnIdRef.current !== null && prevTurnIdRef.current !== currentTurnId && isMyTurn) {
+            notify("Memory — c'est ton tour !");
+        }
+        prevTurnIdRef.current = currentTurnId;
+    }, [currentTurnId, isMyTurn, notify]);
 
     // Turn countdown
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -88,6 +109,13 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
     const currentPlayerName = playerNames[currentTurnId] ?? "…";
 
     return (
+        <>
+        {showNotifBanner && (
+            <NotificationBanner
+                onAccept={async () => { await requestAndEnable(); setShowNotifBanner(false); }}
+                onDismiss={() => { localStorage.setItem('notif-asked', 'true'); setShowNotifBanner(false); }}
+            />
+        )}
         <GameShell
             room={room}
             chatMessages={chatMessages}
@@ -136,5 +164,6 @@ export default function MemoryGame({ room, sessionId, gameState, players, chatMe
                 ))}
             </div>
         </GameShell>
+        </>
     );
 }

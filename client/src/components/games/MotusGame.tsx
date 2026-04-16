@@ -1,6 +1,8 @@
 import type {Room} from '@colyseus/sdk';
 import {Type} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
+import { useNotifications } from '../../hooks/useNotifications';
+import NotificationBanner from '../NotificationBanner';
 import type {
     ChatMsg,
     GenericGameState,
@@ -267,6 +269,24 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canGuess, currentTurnId, myGuesses.length === 0]);
 
+    // Notifications (coop only — in VS it's always your turn)
+    const { notify, alreadyAsked, requestAndEnable, permission, supported: notifSupported } = useNotifications();
+    const [showNotifBanner, setShowNotifBanner] = useState(false);
+    const prevTurnIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (mode === "coop" && phase === "playing" && !alreadyAsked && notifSupported && permission !== 'denied') {
+            setShowNotifBanner(true);
+        }
+    }, [phase]);
+
+    useEffect(() => {
+        if (mode === "coop" && prevTurnIdRef.current !== null && prevTurnIdRef.current !== currentTurnId && isMyTurn) {
+            notify("Motus — c'est ton tour !");
+        }
+        prevTurnIdRef.current = currentTurnId;
+    }, [currentTurnId, isMyTurn, mode, notify]);
+
     // Round countdown
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     useEffect(() => {
@@ -434,6 +454,13 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
 
     // ── Header ─────────────────────────────────────────────────────────────
     return (
+        <>
+        {showNotifBanner && (
+            <NotificationBanner
+                onAccept={async () => { await requestAndEnable(); setShowNotifBanner(false); }}
+                onDismiss={() => { localStorage.setItem('notif-asked', 'true'); setShowNotifBanner(false); }}
+            />
+        )}
         <GameShell
             room={room}
             chatMessages={chatMessages}
@@ -539,5 +566,6 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                 )}
             </div>
         </GameShell>
+        </>
     );
 }
