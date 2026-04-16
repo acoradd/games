@@ -12,6 +12,22 @@ export interface ChangelogVersion {
 
 export const changelog: ChangelogVersion[] = [
     {
+        version: '0.10',
+        date: '16/04/2026',
+        entries: [
+            { date: '16/04/2026', type: 'feat', label: 'Choix du statut spectateur dès le lobby, avec section dédiée dans la liste des joueurs' },
+            { date: '16/04/2026', type: 'feat', label: 'Les spectateurs peuvent s\'inscrire pour jouer à partir de la prochaine manche via un bouton dédié' },
+            { date: '16/04/2026', type: 'fix', label: 'Les spectateurs ne rejoignent plus automatiquement la partie au début d\'une nouvelle manche' },
+            { date: '16/04/2026', type: 'fix', label: 'Retour au lobby : les spectateurs restent spectateurs, les joueurs éliminés redeviennent joueurs' },
+            { date: '16/04/2026', type: 'feat', label: 'Votes en parallèle : plusieurs votes peuvent se dérouler simultanément' },
+            { date: '16/04/2026', type: 'feat', label: 'Anti-spam : un joueur ne peut initier qu\'un vote à la fois' },
+            { date: '16/04/2026', type: 'feat', label: 'Les votes disparaissent dès qu\'on a voté (plus de gêne visuelle)' },
+            { date: '16/04/2026', type: 'feat', label: 'Votes déplacés en overlay flottant, hors de la sidebar (lobby et jeu)' },
+            { date: '16/04/2026', type: 'feat', label: 'Boutons hôte (terminer manche/partie) déplacés dans le header du jeu' },
+            { date: '16/04/2026', type: 'fix', label: 'Motus : un mot ne peut être signalé comme inapproprié que si la majorité absolue des joueurs vote "Non"' },
+        ],
+    },
+    {
         version: '0.9',
         date: '15/04/2026',
         entries: [
