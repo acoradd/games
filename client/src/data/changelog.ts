@@ -25,6 +25,7 @@ export const changelog: ChangelogVersion[] = [
             { date: '16/04/2026', type: 'feat', label: 'Votes déplacés en overlay flottant, hors de la sidebar (lobby et jeu)' },
             { date: '16/04/2026', type: 'feat', label: 'Boutons hôte (terminer manche/partie) déplacés dans le header du jeu' },
             { date: '16/04/2026', type: 'fix', label: 'Motus : un mot ne peut être signalé comme inapproprié que si la majorité absolue des joueurs vote "Non"' },
+            { date: '16/04/2026', type: 'feat', label: 'Notifications système quand c\'est ton tour (Memory, Motus coop), activables depuis les paramètres' },
         ],
     },
     {
