@@ -92,7 +92,10 @@ export class MotusHandler implements GameHandler {
         this.vsGuesses.clear();
 
         const playerIds = Array.from(this.ctx.getPlayers().keys())
-            .filter(id => !this.ctx.getPlayers().get(id)?.isEliminated);
+            .filter(id => {
+                const p = this.ctx.getPlayers().get(id);
+                return p && !p.isEliminated && !p.isSpectator;
+            });
 
         const playerNames: Record<string, string> = { ...existingNames };
         const playerAvatars: Record<string, { username: string; gravatarUrl: string }> = { ...existingAvatars };

@@ -9,6 +9,7 @@ export interface LobbyPlayer {
     isEliminated: boolean;
     isSpectator: boolean;
     isMuted: boolean;
+    wantsToPlay: boolean;
 }
 
 export interface ChatMsg {

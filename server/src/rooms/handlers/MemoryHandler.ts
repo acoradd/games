@@ -64,11 +64,14 @@ export class MemoryHandler implements GameHandler {
 
         this.ctx.getPlayers().forEach((p, id) => {
             playerNames[id] = p.username;
-            if (!p.isEliminated) scores[id] = 0;
+            if (!p.isEliminated && !p.isSpectator) scores[id] = 0;
         });
 
         const playerIds = Array.from(this.ctx.getPlayers().keys())
-            .filter(id => !this.ctx.getPlayers().get(id)?.isEliminated);
+            .filter(id => {
+                const p = this.ctx.getPlayers().get(id);
+                return p && !p.isEliminated && !p.isSpectator;
+            });
 
         const gs: MemoryGameState = {
             phase: "picking1",

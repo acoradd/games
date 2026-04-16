@@ -1,5 +1,5 @@
 import type {Room} from '@colyseus/sdk';
-import {Crown, Eye, Flag, LogOut, Play, Send, SkipForward, Trophy, VolumeX, WifiOff, X} from 'lucide-react';
+import {Crown, Eye, Flag, LogOut, Play, Send, SkipForward, Trophy, UserPlus, VolumeX, WifiOff, X} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import type {ChatMsg, GenericGameState, LobbyPlayer, LobbyState, VoteState} from '../../models/Lobby';
 import Avatar from '../Avatar';
@@ -76,6 +76,7 @@ export default function GameShell({
     const showForceReturn    = isHost && (phase === "playing" || phase === "roundEnd");
     const showJoinAsPlayer   = canToggleSpectator && myIsSpectator && !myIsElim && phase === "playing";
     const showGoSpectator    = canToggleSpectator && !myIsSpectator && !myIsElim && phase === "playing";
+    const showWantToPlay     = myIsSpectator && !myIsElim && phase !== "ended";
 
     const [mobileTab,  setMobileTab]  = useState<"jeu" | "scores" | "chat">("jeu");
     const [chatInput,  setChatInput]  = useState("");
@@ -256,9 +257,14 @@ export default function GameShell({
                                             <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
                                             <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950 ${p.isConnected ? "bg-emerald-400" : "bg-gray-600"}`} />
                                         </div>
-                                        <span className="truncate">
-                                            {p.username}
-                                            {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                                        <span className="flex items-center gap-1 truncate min-w-0">
+                                            <span className="truncate">
+                                                {p.username}
+                                                {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                                            </span>
+                                            {!isMe && p.wantsToPlay && (
+                                                <UserPlus className="w-3 h-3 text-indigo-400 shrink-0" title="Veut jouer la prochaine manche" />
+                                            )}
                                         </span>
                                     </div>
                                     {!isMe && (
@@ -366,7 +372,7 @@ export default function GameShell({
                             : scoreboardFooter}
 
                         {/* Boutons joueur */}
-                        {(showJoinAsPlayer || showGoSpectator || showForfeit) && (
+                        {(showJoinAsPlayer || showGoSpectator || showForfeit || showWantToPlay) && (
                             <div className="mt-3 border-t border-gray-800 pt-3 flex flex-col gap-2">
                                 {showJoinAsPlayer && (
                                     <button
@@ -375,6 +381,19 @@ export default function GameShell({
                                     >
                                         <Play className="w-3 h-3" />
                                         Rejoindre la partie
+                                    </button>
+                                )}
+                                {showWantToPlay && (
+                                    <button
+                                        onClick={() => room.send("spectator:wantToPlay")}
+                                        className={`w-full flex items-center justify-center gap-1.5 text-xs border rounded-lg py-1.5 transition-colors ${
+                                            myPlayer?.wantsToPlay
+                                                ? "text-indigo-300 border-indigo-800/60 bg-indigo-950/40 hover:border-red-900/60 hover:text-red-400"
+                                                : "text-gray-500 border-gray-800 hover:text-indigo-300 hover:border-indigo-800/60"
+                                        }`}
+                                    >
+                                        <UserPlus className="w-3 h-3" />
+                                        {myPlayer?.wantsToPlay ? "Inscrit · prochaine manche" : "Jouer la prochaine manche"}
                                     </button>
                                 )}
                                 {showGoSpectator && (

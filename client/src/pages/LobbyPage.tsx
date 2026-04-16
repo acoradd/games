@@ -1,6 +1,6 @@
 import type {Room} from '@colyseus/sdk';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Clipboard, Check, Link, Send, X, WifiOff, Plus, Loader2, Crown, VolumeX} from 'lucide-react';
+import {Clipboard, Check, Eye, Link, Play, Send, X, WifiOff, Plus, Loader2, Crown, VolumeX} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
@@ -146,7 +146,8 @@ export default function LobbyPage() {
                         id: p.id, sessionId: p.sessionId ?? '', username: p.username, gravatarUrl: p.gravatarUrl ?? '',
                         isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                        isSpectator: p.isSpectator ?? false, isMuted: p.isMuted ?? false
+                        isSpectator: p.isSpectator ?? false, isMuted: p.isMuted ?? false,
+                        wantsToPlay: p.wantsToPlay ?? false,
                     })
                 );
             } else {
@@ -156,7 +157,8 @@ export default function LobbyPage() {
                         id: p.id, sessionId: p.sessionId ?? '', username: p.username, gravatarUrl: p.gravatarUrl ?? '',
                         isHost: p.isHost, isReady: p.isReady,
                         isConnected: p.isConnected ?? true, isEliminated: p.isEliminated ?? false,
-                        isSpectator: p.isSpectator ?? false, isMuted: p.isMuted ?? false
+                        isSpectator: p.isSpectator ?? false, isMuted: p.isMuted ?? false,
+                        wantsToPlay: p.wantsToPlay ?? false,
                     })
                 );
             }
@@ -361,7 +363,8 @@ export default function LobbyPage() {
     }
 
     const me = players.find((p) => p.id === myPlayerId);
-    const allReady = players.length > 0 && players.every((p) => p.isReady);
+    const activePlayers = players.filter((p) => !p.isSpectator);
+    const allReady = activePlayers.length > 0 && activePlayers.every((p) => p.isReady);
 
     // ── États de chargement / erreur ────────────────────────────────────────
     if (loading) {
@@ -567,10 +570,10 @@ export default function LobbyPage() {
                     {/* Joueurs */}
                     <div className={`p-4 border-b border-gray-800 ${mobileTab === 'chat' ? 'hidden lg:block' : ''}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-3">
-                            Joueurs ({players.length})
+                            Joueurs ({players.filter(p => !p.isSpectator).length})
                         </p>
                         <ul className="flex flex-col gap-2">
-                            {players.map((p) => {
+                            {players.filter(p => !p.isSpectator).map((p) => {
                                 const isMe = p.id === myPlayerId;
                                 return (
                                     <li key={p.id} className="group flex items-center justify-between gap-2">
@@ -620,6 +623,59 @@ export default function LobbyPage() {
                                 );
                             })}
                         </ul>
+                        {players.some(p => p.isSpectator) && (
+                            <div className="mt-3 border-t border-gray-800 pt-3">
+                                <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-2 flex items-center gap-1">
+                                    <Eye className="w-3 h-3" />
+                                    Spectateurs ({players.filter(p => p.isSpectator).length})
+                                </p>
+                                <ul className="flex flex-col gap-1.5">
+                                    {players.filter(p => p.isSpectator).map((p) => {
+                                        const isMe = p.id === myPlayerId;
+                                        return (
+                                            <li key={p.id} className="group flex items-center justify-between gap-2 text-sm text-gray-500">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="relative shrink-0">
+                                                        <Avatar username={p.username} gravatarUrl={p.gravatarUrl || null} size="sm" />
+                                                        {p.isHost && (
+                                                            <span className="absolute -top-1 -left-1 bg-gray-950 rounded-full p-0.5">
+                                                                <Crown className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="truncate">
+                                                        {p.username}
+                                                        {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {!isMe && (
+                                                        <button
+                                                            onClick={() => initiateVote(p.isMuted ? 'unmute_player' : 'mute_player', p.id)}
+                                                            title={p.isMuted ? "Voter pour débloquer le chat" : "Voter pour bloquer le chat"}
+                                                            className={p.isMuted
+                                                                ? "text-red-500 hover:text-emerald-400 transition-colors"
+                                                                : "opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"}
+                                                        >
+                                                            <VolumeX className="w-3 h-3" />
+                                                        </button>
+                                                    )}
+                                                    {isHost && !isMe && (
+                                                        <button
+                                                            onClick={() => handleKick(p.id)}
+                                                            title="Expulser"
+                                                            className="text-gray-600 hover:text-red-400 transition-colors"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        )}
                     </div>
 
                     {/* Chat */}
@@ -760,16 +816,38 @@ export default function LobbyPage() {
             {/* ── Footer actions ── */}
             <footer
                 className="border-t border-gray-800 px-4 lg:px-6 py-3 flex items-center justify-between gap-3 shrink-0 flex-wrap">
-                <button
-                    onClick={handleReady}
-                    className={`px-5 py-2 rounded-lg font-semibold transition-colors ${
-                        me?.isReady
-                            ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-white'
-                    }`}
-                >
-                    {me?.isReady ? <><Check className="w-4 h-4 inline-block mr-1" />Prêt</> : 'Prêt ?'}
-                </button>
+                <div className="flex items-center gap-2">
+                    {me?.isSpectator ? (
+                        <button
+                            onClick={() => roomRef.current?.send('lobby:spectator')}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors"
+                        >
+                            <Play className="w-3.5 h-3.5" />
+                            Rejoindre comme joueur
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                onClick={handleReady}
+                                className={`px-5 py-2 rounded-lg font-semibold transition-colors ${
+                                    me?.isReady
+                                        ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-white'
+                                }`}
+                            >
+                                {me?.isReady ? <><Check className="w-4 h-4 inline-block mr-1" />Prêt</> : 'Prêt ?'}
+                            </button>
+                            <button
+                                onClick={() => roomRef.current?.send('lobby:spectator')}
+                                title="Passer en mode spectateur"
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-sky-400 border border-gray-800 hover:border-sky-900/60 transition-colors"
+                            >
+                                <Eye className="w-3.5 h-3.5" />
+                                Spectateur
+                            </button>
+                        </>
+                    )}
+                </div>
 
                 {isHost && (
                     <button

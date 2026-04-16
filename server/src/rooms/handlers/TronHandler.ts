@@ -73,7 +73,10 @@ export class TronHandler implements GameHandler {
         ];
 
         const playerIds = Array.from(this.ctx.getPlayers().keys())
-            .filter(id => !this.ctx.getPlayers().get(id)?.isEliminated);
+            .filter(id => {
+                const p = this.ctx.getPlayers().get(id);
+                return p && !p.isEliminated && !p.isSpectator;
+            });
 
         const playerOrder: string[] = [];
         const players: Record<string, TronPlayer> = {};

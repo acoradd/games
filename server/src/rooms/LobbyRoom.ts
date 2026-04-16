@@ -59,8 +59,19 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         this.onMessage("ready", (client: Client) => {
             const playerIdStr = this.getPlayerIdStr(client.sessionId);
             const player = playerIdStr ? this.state.players.get(playerIdStr) : undefined;
-            if (!player) return;
+            if (!player || player.isSpectator) return;
             player.isReady = !player.isReady;
+        });
+
+        this.onMessage("lobby:spectator", (client: Client) => {
+            if (this.state.status !== "lobby") return;
+            const playerIdStr = this.getPlayerIdStr(client.sessionId);
+            if (!playerIdStr) return;
+            const player = this.state.players.get(playerIdStr);
+            if (!player) return;
+            player.isSpectator = !player.isSpectator;
+            // Spectateurs auto-prêts, joueurs doivent cliquer Prêt
+            player.isReady = player.isSpectator;
         });
 
         this.onMessage("selectGame", async (client: Client, data: { slug: string }) => {
@@ -164,6 +175,14 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
             this.activeHandler?.dispose();
 
+            // Promote spectators who opted in, then reset the flag for all
+            this.state.players.forEach((p) => {
+                if (p.isSpectator && p.wantsToPlay && !p.isEliminated) {
+                    p.isSpectator = false;
+                }
+                p.wantsToPlay = false;
+            });
+
             const options = JSON.parse(this.state.gameOptionsJson) as Record<string, unknown>;
             await this.activeHandler?.init(options, this.prevRound);
         });
@@ -191,6 +210,15 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             const player = this.state.players.get(playerIdStr);
             if (!player || player.isEliminated || player.isSpectator) return;
             this.eliminatePlayer(playerIdStr);
+        });
+
+        this.onMessage("spectator:wantToPlay", (client: Client) => {
+            if (this.state.status !== "game") return;
+            const playerIdStr = this.getPlayerIdStr(client.sessionId);
+            if (!playerIdStr) return;
+            const player = this.state.players.get(playerIdStr);
+            if (!player || !player.isSpectator || player.isEliminated) return;
+            player.wantsToPlay = !player.wantsToPlay;
         });
 
         this.onMessage("spectator:set", (client: Client, data: { spectator: boolean }) => {
@@ -529,11 +557,12 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         }
 
         this.state.players.forEach((p) => {
-            p.isReady      = false;
             p.isEliminated = false;
-            p.isSpectator  = false;
             p.isHost       = false;
             p.isMuted      = false;
+            p.wantsToPlay  = false;
+            // Les spectateurs restent spectateurs (auto-prêts) ; les joueurs repassent en attente
+            p.isReady      = p.isSpectator;
         });
 
         const firstEntry = this.state.players.entries().next().value as [string, LobbyPlayer] | undefined;
