@@ -687,51 +687,6 @@ export default function LobbyPage() {
                     <div className={`flex-1 flex flex-col min-h-0 ${mobileTab === 'joueurs' ? 'hidden lg:flex' : ''}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2">Chat</p>
 
-                        {/* Vote panels */}
-                        {activeVotes.filter(v => v.myChoice === null).map((vote) => (
-                            <div key={vote.voteId} className="mx-3 mb-2 rounded-xl border border-indigo-800/60 bg-indigo-950/60 p-3 flex flex-col gap-2 shrink-0">
-                                <div className="flex items-start justify-between gap-2">
-                                    <p className="text-xs font-semibold text-indigo-200 leading-snug">{vote.question}</p>
-                                    <VoteTimer deadline={vote.deadline} />
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="text-emerald-400 font-semibold tabular-nums">{vote.yesCount}</span>
-                                    <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
-                                        {vote.yesCount + vote.noCount > 0 && (
-                                            <div
-                                                className="h-full bg-emerald-500 transition-all"
-                                                style={{ width: `${(vote.yesCount / (vote.yesCount + vote.noCount)) * 100}%` }}
-                                            />
-                                        )}
-                                    </div>
-                                    <span className="text-red-400 font-semibold tabular-nums">{vote.noCount}</span>
-                                </div>
-                                {vote.targetPlayerId === myPlayerId ? (
-                                    <p className="text-xs text-gray-500 text-center italic">Vous êtes concerné par ce vote.</p>
-                                ) : vote.myChoice === null ? (
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => castVote(vote.voteId, true)}
-                                            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-800/60 transition-colors"
-                                        >
-                                            {vote.yesLabel}
-                                        </button>
-                                        <button
-                                            onClick={() => castVote(vote.voteId, false)}
-                                            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-900/40 hover:bg-red-900/70 text-red-300 border border-red-900/60 transition-colors"
-                                        >
-                                            {vote.noLabel}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-gray-500 text-center">
-                                        Vote envoyé : <span className={vote.myChoice ? "text-emerald-400" : "text-red-400"}>
-                                            {vote.myChoice ? vote.yesLabel : vote.noLabel}
-                                        </span>
-                                    </p>
-                                )}
-                            </div>
-                        ))}
 
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
                             {chatMessages.length === 0 && (
@@ -812,6 +767,50 @@ export default function LobbyPage() {
                     </div>
                 </aside>
             </div>
+
+            {/* ── Votes flottants ── */}
+            {activeVotes.some(v => v.myChoice === null) && (
+                <div className="fixed bottom-20 left-2 right-2 lg:left-4 lg:right-auto lg:w-72 flex flex-col gap-2 z-30 max-h-[50vh] overflow-y-auto pointer-events-none">
+                    {activeVotes.filter(v => v.myChoice === null).map((vote) => (
+                        <div key={vote.voteId} className="pointer-events-auto rounded-xl border border-indigo-800/60 bg-gray-950/95 backdrop-blur-sm shadow-xl p-3 flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-2">
+                                <p className="text-xs font-semibold text-indigo-200 leading-snug">{vote.question}</p>
+                                <VoteTimer deadline={vote.deadline} />
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                <span className="text-emerald-400 font-semibold tabular-nums">{vote.yesCount}</span>
+                                <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
+                                    {vote.yesCount + vote.noCount > 0 && (
+                                        <div
+                                            className="h-full bg-emerald-500 transition-all"
+                                            style={{ width: `${(vote.yesCount / (vote.yesCount + vote.noCount)) * 100}%` }}
+                                        />
+                                    )}
+                                </div>
+                                <span className="text-red-400 font-semibold tabular-nums">{vote.noCount}</span>
+                            </div>
+                            {vote.targetPlayerId === myPlayerId ? (
+                                <p className="text-xs text-gray-500 text-center italic">Vous êtes concerné par ce vote.</p>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => castVote(vote.voteId, true)}
+                                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-800/60 transition-colors"
+                                    >
+                                        {vote.yesLabel}
+                                    </button>
+                                    <button
+                                        onClick={() => castVote(vote.voteId, false)}
+                                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-900/40 hover:bg-red-900/70 text-red-300 border border-red-900/60 transition-colors"
+                                    >
+                                        {vote.noLabel}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* ── Footer actions ── */}
             <footer
