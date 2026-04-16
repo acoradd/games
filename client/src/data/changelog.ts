@@ -26,6 +26,7 @@ export const changelog: ChangelogVersion[] = [
             { date: '16/04/2026', type: 'feat', label: 'Boutons hôte (terminer manche/partie) déplacés dans le header du jeu' },
             { date: '16/04/2026', type: 'fix', label: 'Motus : un mot ne peut être signalé comme inapproprié que si la majorité absolue des joueurs vote "Non"' },
             { date: '16/04/2026', type: 'feat', label: 'Notifications système quand c\'est ton tour (Memory, Motus coop), activables depuis les paramètres' },
+            { date: '16/04/2026', type: 'feat', label: 'Mode daltonien pour Motus : couleurs bleu/orange à la place de vert/jaune, configurable dans les paramètres' },
         ],
     },
     {

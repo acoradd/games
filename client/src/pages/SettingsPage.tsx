@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStoredPlayer, updateStoredPlayerGravatarUrl, updateStoredPlayerDisplayName } from '../services/playerService';
-import { fetchProfile, updatePassword, updateEmail, updateDisplayName, deleteAccount } from '../services/profileService';
+import { getStoredPlayer, updateStoredPlayerGravatarUrl, updateStoredPlayerDisplayName, updateStoredPlayerSettings } from '../services/playerService';
+import { fetchProfile, updatePassword, updateEmail, updateDisplayName, updateSettings, deleteAccount } from '../services/profileService';
 import { clearStoredPlayer } from '../services/playerService';
 import Avatar from '../components/Avatar';
 import type { Player } from '../models/Player';
@@ -35,6 +35,9 @@ export default function SettingsPage() {
     // Delete account
     const { supported: notifSupported, permission, enabled: notifEnabled, enable: enableNotif, disable: disableNotif } = useNotifications();
 
+    // Colorblind mode
+    const [colorblindMode, setColorblindMode] = useState(stored.player.colorblindMode ?? false);
+
     // Delete account
     const [deleteConfirm, setDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
@@ -51,8 +54,15 @@ export default function SettingsPage() {
             setPlayer(p);
             setEmail(p.email ?? '');
             setDisplayName(p.displayName);
+            setColorblindMode(p.colorblindMode ?? false);
         });
     }, []);
+
+    async function handleColorblindToggle(value: boolean) {
+        setColorblindMode(value);
+        await updateSettings({ colorblindMode: value });
+        updateStoredPlayerSettings({ colorblindMode: value });
+    }
 
     async function handleDisplayNameSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -318,6 +328,27 @@ export default function SettingsPage() {
                             {pwLoading ? 'Mise à jour…' : 'Mettre à jour'}
                         </button>
                     </form>
+                </section>
+
+                {/* Accessibilité */}
+                <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+                    <h2 className="text-base font-semibold text-white mb-1">Accessibilité</h2>
+                    <p className="text-sm text-gray-500 mb-5">
+                        En mode daltonien, les couleurs de Motus sont remplacées par du bleu (bonne position) et de l'orange (mauvaise position).
+                    </p>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => handleColorblindToggle(!colorblindMode)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                                colorblindMode ? 'bg-indigo-600' : 'bg-gray-700'
+                            }`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                colorblindMode ? 'translate-x-6' : 'translate-x-1'
+                            }`} />
+                        </button>
+                        <span className="text-sm text-gray-300">Mode daltonien</span>
+                    </div>
                 </section>
 
                 {/* Notifications */}

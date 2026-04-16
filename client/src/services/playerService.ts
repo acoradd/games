@@ -57,3 +57,10 @@ export function updateStoredPlayerDisplayName(displayName: string): void {
     stored.player.displayName = displayName;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
 }
+
+export function updateStoredPlayerSettings(settings: { colorblindMode?: boolean }): void {
+    const stored = getStoredPlayer();
+    if (!stored) return;
+    Object.assign(stored.player, settings);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+}

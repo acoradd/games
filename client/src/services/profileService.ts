@@ -44,6 +44,10 @@ export async function fetchGameSessions(): Promise<GameSession[]> {
     return data;
 }
 
+export async function updateSettings(settings: { colorblindMode?: boolean }): Promise<void> {
+    await api.put("/api/profile/me/settings", settings);
+}
+
 export async function deleteAccount(): Promise<void> {
     await api.delete("/api/profile/me");
 }

@@ -4,6 +4,7 @@ export interface Player {
     displayName: string;
     email?: string | null;
     gravatarUrl?: string | null;
+    colorblindMode?: boolean;
     createdAt: string;
     lastSeenAt: string;
 }

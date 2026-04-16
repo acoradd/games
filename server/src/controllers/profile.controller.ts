@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getProfile, changePassword, getGameSessions, updateEmail, updateDisplayName, deleteAccount } from "../services/profile.service.js";
+import { getProfile, changePassword, getGameSessions, updateEmail, updateDisplayName, deleteAccount, updateSettings } from "../services/profile.service.js";
 
 type AuthedRequest = Request & { player: { playerId: number; username: string } };
 
@@ -72,6 +72,18 @@ export async function putDisplayName(req: Request, res: Response) {
             res.status(409).json({ error: "Ce pseudo est déjà pris" });
             return;
         }
+        res.status(500).json({ error: "Internal server error" });
+    }
+}
+
+export async function putSettings(req: Request, res: Response) {
+    const { playerId } = (req as AuthedRequest).player;
+    const { colorblindMode } = req.body as { colorblindMode?: boolean };
+
+    try {
+        await updateSettings(playerId, { colorblindMode });
+        res.json({ ok: true });
+    } catch {
         res.status(500).json({ error: "Internal server error" });
     }
 }

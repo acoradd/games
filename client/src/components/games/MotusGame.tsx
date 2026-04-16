@@ -3,6 +3,7 @@ import {Type} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import { useNotifications } from '../../hooks/useNotifications';
 import NotificationBanner from '../NotificationBanner';
+import { getStoredPlayer } from '../../services/playerService';
 import type {
     ChatMsg,
     GenericGameState,
@@ -27,6 +28,16 @@ const AZERTY_ROWS = [
 
 const RESULT_PRIORITY: Record<MotusLetterResult, number> = { correct: 3, misplaced: 2, absent: 1 };
 
+function motusColors(colorblind: boolean) {
+    return {
+        correct:     colorblind ? "bg-blue-500 border-blue-400 text-white"    : "bg-green-600 border-green-500 text-white",
+        correctLock: colorblind ? "bg-blue-700 border-blue-500 text-white"    : "bg-green-700 border-green-500 text-white",
+        misplaced:   colorblind ? "bg-orange-500 border-orange-400 text-white" : "bg-amber-500 border-amber-400 text-white",
+        correctDot:  colorblind ? "bg-blue-500"    : "bg-green-600",
+        misplacedDot: colorblind ? "bg-orange-500" : "bg-amber-500",
+    };
+}
+
 function computeLetterStates(guesses: MotusGuess[]): Record<string, MotusLetterResult> {
     const states: Record<string, MotusLetterResult> = {};
     for (const { word, result } of guesses) {
@@ -42,20 +53,22 @@ function computeLetterStates(guesses: MotusGuess[]): Record<string, MotusLetterR
 // ── LetterCell ────────────────────────────────────────────────────────────────
 
 function LetterCell({
-    letter, result, locked, cursor,
+    letter, result, locked, cursor, colorblind = false,
 }: {
-    letter:  string;
-    result?: MotusLetterResult | null;
-    locked?: boolean;
-    cursor?: boolean;
+    letter:     string;
+    result?:    MotusLetterResult | null;
+    locked?:    boolean;
+    cursor?:    boolean;
+    colorblind?: boolean;
 }) {
+    const c = motusColors(colorblind);
     let bg: string;
     if (locked) {
-        bg = "bg-green-700 border-green-500 text-white";
+        bg = c.correctLock;
     } else if (result === "correct") {
-        bg = "bg-green-600 border-green-500 text-white";
+        bg = c.correct;
     } else if (result === "misplaced") {
-        bg = "bg-amber-500 border-amber-400 text-white";
+        bg = c.misplaced;
     } else if (result === "absent") {
         bg = "bg-gray-700 border-gray-600 text-gray-400";
     } else if (letter) {
@@ -79,7 +92,7 @@ function LetterCell({
 // ── MotusGrid ─────────────────────────────────────────────────────────────────
 
 function MotusGrid({
-    guesses, wordLength, firstLetter, maxAttempts, typedInput, isActive, shake, playerInfo,
+    guesses, wordLength, firstLetter, maxAttempts, typedInput, isActive, shake, playerInfo, colorblind,
 }: {
     guesses:      MotusGuess[];
     wordLength:   number;
@@ -89,6 +102,7 @@ function MotusGrid({
     isActive:     boolean;
     shake:        boolean;
     playerInfo?:  Record<string, { username: string; gravatarUrl: string }>;
+    colorblind?:  boolean;
 }) {
     const rows       = maxAttempts > 0 ? maxAttempts : Math.max(guesses.length + 1, 6);
     const currentRow = guesses.length;
@@ -123,11 +137,12 @@ function MotusGrid({
                                             key={colIdx}
                                             letter={guess.word[colIdx] ?? ""}
                                             result={guess.result[colIdx] ?? null}
+                                            colorblind={colorblind}
                                         />
                                     );
                                 }
                                 if (colIdx === 0) {
-                                    return <LetterCell key={colIdx} letter={firstLetter} locked />;
+                                    return <LetterCell key={colIdx} letter={firstLetter} locked colorblind={colorblind} />;
                                 }
                                 if (!isCurrentRow) {
                                     return <LetterCell key={colIdx} letter="" />;
@@ -148,17 +163,19 @@ function MotusGrid({
 
 // ── AZERTY keyboard ───────────────────────────────────────────────────────────
 
-function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled }: {
+function AzertyKeyboard({ letterStates, onKey, onBackspace, onEnter, disabled, colorblind = false }: {
     letterStates: Record<string, MotusLetterResult>;
     onKey:        (letter: string) => void;
     onBackspace:  () => void;
     onEnter:      () => void;
     disabled:     boolean;
+    colorblind?:  boolean;
 }) {
+    const c = motusColors(colorblind);
     function keyStyle(letter: string): string {
         const s = letterStates[letter];
-        if (s === "correct")   return "bg-green-600 border-green-500 text-white";
-        if (s === "misplaced") return "bg-amber-500 border-amber-400 text-white";
+        if (s === "correct")   return c.correct;
+        if (s === "misplaced") return c.misplaced;
         if (s === "absent")    return "bg-gray-900 border-gray-800 text-gray-600";
         return "bg-gray-700 border-gray-500 text-white hover:bg-gray-600 active:bg-gray-500";
     }
@@ -230,8 +247,10 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
         roundPoints, roundWinnerIds, roundStartedAt,
     } = gameState;
 
-    const myState  = gsPlayers[sessionId];
-    const isMyTurn = mode === "coop" ? sessionId === currentTurnId : true;
+    const myState      = gsPlayers[sessionId];
+    const isMyTurn     = mode === "coop" ? sessionId === currentTurnId : true;
+    const colorblind   = getStoredPlayer()?.player.colorblindMode ?? false;
+    const colors       = motusColors(colorblind);
 
     // VS: own guesses arrive via private message (words never in shared state)
     const [myPrivateGuesses, setMyPrivateGuesses] = useState<MotusGuess[]>([]);
@@ -417,8 +436,8 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                                     <div className="flex gap-0.5">
                                         {lastGuess.result.map((r, i) => (
                                             <div key={i} className={`w-3 h-3 rounded-sm shrink-0 ${
-                                                r === "correct"   ? "bg-green-600" :
-                                                r === "misplaced" ? "bg-amber-500" :
+                                                r === "correct"   ? colors.correctDot :
+                                                r === "misplaced" ? colors.misplacedDot :
                                                 "bg-gray-600"
                                             }`} />
                                         ))}
@@ -526,6 +545,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                     isActive={canGuess || (mode === "coop" && phase === "playing" && !isSolved && !isEliminated)}
                     shake={shake}
                     playerInfo={mode === "coop" ? gameState.playerAvatars : undefined}
+                    colorblind={colorblind}
                 />
 
                 {/* Error message */}
@@ -550,6 +570,7 @@ export default function MotusGame({ room, sessionId, gameState, players, chatMes
                         onBackspace={removeLetter}
                         onEnter={submitGuess}
                         disabled={!canGuess}
+                        colorblind={colorblind}
                     />
                 )}
 

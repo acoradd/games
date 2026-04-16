@@ -30,7 +30,8 @@ model Player {
   username     String        @unique
   displayName  String        @unique @map("display_name")
   passwordHash String        @map("password_hash")
-  email        String?
+  email         String?
+  colorblindMode Boolean      @default(false) @map("colorblind_mode")
   createdAt    DateTime      @default(now()) @map("created_at")
   lastSeenAt   DateTime      @default(now()) @map("last_seen_at")
   sessions     GameSession[]
