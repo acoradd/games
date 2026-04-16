@@ -5,7 +5,7 @@ type BroadcastFn = (type: string, data: unknown) => void;
 type ClockFn     = (fn: () => void, delay: number) => { clear(): void };
 type ChatFn      = (text: string) => void;
 
-const MAX_QUEUE_SIZE = 5;
+const MAX_PARALLEL = 5;
 
 interface ActiveVote {
     id: string;
@@ -17,15 +17,8 @@ interface ActiveVote {
     onEnd: (result: VoteResult) => void;
 }
 
-interface QueuedVote {
-    config: VoteConfig;
-    eligiblePlayerIds: string[];
-    onEnd: (result: VoteResult) => void;
-}
-
 export class VoteManager {
-    private active: ActiveVote | null = null;
-    private queue: QueuedVote[] = [];
+    private actives = new Map<string, ActiveVote>();
 
     constructor(
         private broadcast: BroadcastFn,
@@ -33,40 +26,47 @@ export class VoteManager {
         private chatFn: ChatFn,
     ) {}
 
-    get isActive(): boolean { return this.active !== null; }
-    get queueLength(): number { return this.queue.length; }
+    get isActive(): boolean { return this.actives.size > 0; }
 
     /**
-     * Re-sends the current vote state to a single client (e.g. after page navigation).
-     * No-op if no vote is active.
+     * Re-sends all active vote states to a single client (e.g. after page navigation).
      */
     resyncTo(sendFn: (type: string, data: unknown) => void): void {
-        if (!this.active) return;
-        const { id, config, votes, deadline } = this.active;
-        const { yesCount, noCount } = this.tally(votes);
-        sendFn("vote:start", {
-            voteId:         id,
-            type:           config.type,
-            question:       config.question,
-            yesLabel:       config.yesLabel,
-            noLabel:        config.noLabel,
-            targetPlayerId: config.targetPlayerId,
-            targetUsername: config.targetUsername,
-            deadline,
-            eligibleCount:  this.active.eligiblePlayerIds.length,
-            yesCount,
-            noCount,
-            queueLength:    this.queue.length,
-        });
+        for (const { id, config, votes, eligiblePlayerIds, deadline } of this.actives.values()) {
+            const { yesCount, noCount } = this.tally(votes);
+            sendFn("vote:start", {
+                voteId:         id,
+                type:           config.type,
+                question:       config.question,
+                yesLabel:       config.yesLabel,
+                noLabel:        config.noLabel,
+                targetPlayerId: config.targetPlayerId,
+                targetUsername: config.targetUsername,
+                deadline,
+                eligibleCount:  eligiblePlayerIds.length,
+                yesCount,
+                noCount,
+            });
+        }
     }
 
-    /** Returns true if a vote of the same type (and same target, if provided) is already active or queued. */
+    /** Returns true if a vote of the same type (and same target) is already active. */
     hasPending(type: VoteType, targetPlayerId?: string): boolean {
-        const matches = (config: VoteConfig) =>
-            config.type === type &&
-            (targetPlayerId === undefined || config.targetPlayerId === targetPlayerId);
-        if (this.active && matches(this.active.config)) return true;
-        return this.queue.some(q => matches(q.config));
+        for (const { config } of this.actives.values()) {
+            if (config.type === type &&
+                (targetPlayerId === undefined || config.targetPlayerId === targetPlayerId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Returns true if this initiator already has an active vote (anti-spam). */
+    hasInitiatorPending(initiatorId: string): boolean {
+        for (const { config } of this.actives.values()) {
+            if (config.initiatorId === initiatorId) return true;
+        }
+        return false;
     }
 
     start(
@@ -74,34 +74,29 @@ export class VoteManager {
         eligiblePlayerIds: string[],
         onEnd: (result: VoteResult) => void,
     ): void {
-        if (this.active) {
-            if (this.queue.length >= MAX_QUEUE_SIZE) return;  // silently drop if queue full
-            this.queue.push({ config, eligiblePlayerIds, onEnd });
-            this.broadcast("vote:queued", { queueLength: this.queue.length });
-            return;
-        }
+        if (this.actives.size >= MAX_PARALLEL) return;
         this.startNow(config, eligiblePlayerIds, onEnd);
     }
 
-    cast(playerId: string, choice: boolean): void {
-        if (!this.active) return;
-        if (!this.active.eligiblePlayerIds.includes(playerId)) return;
-        if (this.active.votes.has(playerId)) return;
+    cast(voteId: string, playerId: string, choice: boolean): void {
+        const active = this.actives.get(voteId);
+        if (!active) return;
+        if (!active.eligiblePlayerIds.includes(playerId)) return;
+        if (active.votes.has(playerId)) return;
 
-        this.active.votes.set(playerId, choice);
-        const { yesCount, noCount } = this.tally(this.active.votes);
-        this.broadcast("vote:update", { voteId: this.active.id, yesCount, noCount });
+        active.votes.set(playerId, choice);
+        const { yesCount, noCount } = this.tally(active.votes);
+        this.broadcast("vote:update", { voteId, yesCount, noCount });
 
-        if (this.active.votes.size >= this.active.eligiblePlayerIds.length) this.forceEnd();
+        if (active.votes.size >= active.eligiblePlayerIds.length) this.forceEnd(voteId);
     }
 
     cancel(): void {
-        if (this.active) {
-            this.active.timer.clear();
-            this.broadcast("vote:cancel", { voteId: this.active.id });
-            this.active = null;
+        for (const { id, timer } of this.actives.values()) {
+            timer.clear();
+            this.broadcast("vote:cancel", { voteId: id });
         }
-        this.queue = [];
+        this.actives.clear();
     }
 
     private startNow(
@@ -111,19 +106,20 @@ export class VoteManager {
     ): void {
         const duration = config.durationMs ?? 30_000;
         const deadline  = Date.now() + duration;
-        const id        = `${config.type}_${Date.now()}`;
+        const id        = `${config.type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-        this.active = {
+        const active: ActiveVote = {
             id, config,
             votes: new Map(),
             eligiblePlayerIds,
             deadline,
-            timer: this.clock(() => this.forceEnd(), duration),
+            timer: this.clock(() => this.forceEnd(id), duration),
             onEnd,
         };
+        this.actives.set(id, active);
 
         this.broadcast("vote:start", {
-            voteId: id,
+            voteId:         id,
             type:           config.type,
             question:       config.question,
             yesLabel:       config.yesLabel,
@@ -134,35 +130,31 @@ export class VoteManager {
             eligibleCount:  eligiblePlayerIds.length,
             yesCount: 0,
             noCount:  0,
-            queueLength:    this.queue.length,
         });
     }
 
-    private forceEnd(): void {
-        if (!this.active) return;
-        const { id, config, votes, onEnd } = this.active;
-        this.active.timer.clear();
-        this.active = null;
+    private forceEnd(voteId: string): void {
+        const active = this.actives.get(voteId);
+        if (!active) return;
+        const { id, config, votes, onEnd } = active;
+        active.timer.clear();
+        this.actives.delete(voteId);
 
         const { yesCount, noCount } = this.tally(votes);
-        const total  = yesCount + noCount;
-        const ratio  = total > 0 ? yesCount / total : 0;
+        const total         = yesCount + noCount;
+        const ratio         = total > 0 ? yesCount / total : 0;
+        const eligibleCount = active.eligiblePlayerIds.length;
         const result: VoteResult = {
             type: config.type,
             targetPlayerId: config.targetPlayerId,
             yesCount, noCount, total, ratio,
+            eligibleCount,
             passed: ratio > 0.5,
         };
 
         this.broadcast("vote:end", { voteId: id, ...result });
         this.chatFn(this.buildResultText(config, result));
         onEnd(result);
-
-        // Start next queued vote
-        if (this.queue.length > 0) {
-            const next = this.queue.shift()!;
-            this.startNow(next.config, next.eligiblePlayerIds, next.onEnd);
-        }
     }
 
     private buildResultText(config: VoteConfig, result: VoteResult): string {

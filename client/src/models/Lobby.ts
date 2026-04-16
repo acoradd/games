@@ -168,7 +168,6 @@ export interface VoteState {
     noCount: number;
     eligibleCount: number;
     myChoice: boolean | null; // null = not yet voted
-    queueLength: number;      // votes waiting after the current one
 }
 
 export interface MotusGameState {

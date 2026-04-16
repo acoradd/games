@@ -7,6 +7,7 @@ export interface VoteConfig {
     noLabel: string;
     targetPlayerId?: string;
     targetUsername?: string;
+    initiatorId?: string;          // playerId who triggered this vote (anti-spam)
     durationMs?: number;
     /** Custom result message. If omitted, a generic format is used. */
     resultMessage?: (result: VoteResult) => string;
@@ -20,4 +21,5 @@ export interface VoteResult {
     total: number;
     ratio: number;
     passed: boolean;
+    eligibleCount: number;
 }

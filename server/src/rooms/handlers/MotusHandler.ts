@@ -433,13 +433,15 @@ export class MotusHandler implements GameHandler {
                     question: `Le mot "${wordForVote}" était-il approprié ?`,
                     yesLabel: "Oui",
                     noLabel: "Non",
-                    resultMessage: (r) => r.passed
-                        ? `Le mot "${wordForVote}" est validé`
-                        : `Le mot "${wordForVote}" a été signalé comme inapproprié`,
+                    resultMessage: (r) => r.noCount > r.eligibleCount / 2
+                        ? `Le mot "${wordForVote}" a été signalé comme inapproprié`
+                        : `Le mot "${wordForVote}" est validé`,
                 },
                 eligibleVoters,
                 async (result) => {
-                    if (!result.passed) {
+                    // Signalement uniquement si la majorité absolue des joueurs éligibles a voté "Non"
+                    const flagged = result.noCount > result.eligibleCount / 2;
+                    if (flagged) {
                         try {
                             await prisma.word.update({
                                 where: { text: wordForVote },

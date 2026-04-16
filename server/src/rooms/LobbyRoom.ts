@@ -250,7 +250,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             if (!this.voteManager) return;
             const playerIdStr = this.getPlayerIdStr(client.sessionId);
             if (!playerIdStr) return;
-            this.voteManager.cast(playerIdStr, data.choice);
+            this.voteManager.cast(data.voteId, playerIdStr, data.choice);
         });
 
         this.onMessage("vote:initiate", (client: Client, data: { type: "skip_turn" | "mute_player" | "unmute_player"; targetPlayerId: string }) => {
@@ -270,14 +270,17 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 .map(([id]) => id);
 
             const u = target.username;
-            // Block duplicate: same type + same target already active or queued
+            // Block duplicate: même type + même cible déjà en cours
             if (this.voteManager!.hasPending(data.type, data.targetPlayerId)) return;
+            // Anti-spam: l'initiateur ne peut lancer qu'un vote à la fois
+            if (this.voteManager!.hasInitiatorPending(initiatorIdStr)) return;
 
             if (data.type === "skip_turn") {
                 if (!this.activeHandler?.allowsReconnection?.()) return;
                 this.voteManager!.start(
                     {
                         type: "skip_turn",
+                        initiatorId: initiatorIdStr,
                         question: `Passer le tour de ${u} ?`,
                         yesLabel: "Passer",
                         noLabel: "Garder",
@@ -297,6 +300,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 this.voteManager!.start(
                     {
                         type: "mute_player",
+                        initiatorId: initiatorIdStr,
                         question: `Muter ${u} ?`,
                         yesLabel: "Bloquer",
                         noLabel: "Laisser",
@@ -320,6 +324,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 this.voteManager!.start(
                     {
                         type: "unmute_player",
+                        initiatorId: initiatorIdStr,
                         question: `Démuté ${u} ?`,
                         yesLabel: "Débloquer",
                         noLabel: "Garder bloqué",

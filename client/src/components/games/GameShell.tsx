@@ -78,10 +78,10 @@ export default function GameShell({
     const showGoSpectator    = canToggleSpectator && !myIsSpectator && !myIsElim && phase === "playing";
     const showWantToPlay     = myIsSpectator && !myIsElim && phase !== "ended";
 
-    const [mobileTab,  setMobileTab]  = useState<"jeu" | "scores" | "chat">("jeu");
-    const [chatInput,  setChatInput]  = useState("");
-    const [confirm,    setConfirm]    = useState<null | { label: string; action: () => void }>(null);
-    const [activeVote, setActiveVote] = useState<VoteState | null>(null);
+    const [mobileTab,   setMobileTab]  = useState<"jeu" | "scores" | "chat">("jeu");
+    const [chatInput,   setChatInput]  = useState("");
+    const [confirm,     setConfirm]    = useState<null | { label: string; action: () => void }>(null);
+    const [activeVotes, setActiveVotes] = useState<VoteState[]>([]);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -93,26 +93,29 @@ export default function GameShell({
     // ── Vote event listeners ──────────────────────────────────────────────────
     useEffect(() => {
         const onStart = (data: Omit<VoteState, 'myChoice'>) => {
-            setActiveVote({ ...data, myChoice: null });
+            setActiveVotes(prev => {
+                if (prev.some(v => v.voteId === data.voteId)) return prev;
+                return [...prev, { ...data, myChoice: null }];
+            });
         };
         const onUpdate = (data: { voteId: string; yesCount: number; noCount: number }) => {
-            setActiveVote(prev => prev && prev.voteId === data.voteId
-                ? { ...prev, yesCount: data.yesCount, noCount: data.noCount }
-                : prev);
+            setActiveVotes(prev => prev.map(v =>
+                v.voteId === data.voteId ? { ...v, yesCount: data.yesCount, noCount: data.noCount } : v
+            ));
         };
-        const onQueued = (data: { queueLength: number }) => {
-            setActiveVote(prev => prev ? { ...prev, queueLength: data.queueLength } : prev);
+        const onEnd = (data: { voteId: string }) => {
+            setActiveVotes(prev => prev.filter(v => v.voteId !== data.voteId));
         };
-        const onEnd = () => setActiveVote(null);
-        const onCancel = () => setActiveVote(null);
+        const onCancel = (data: { voteId: string }) => {
+            setActiveVotes(prev => prev.filter(v => v.voteId !== data.voteId));
+        };
 
         room.onMessage("vote:start",  onStart);
         room.onMessage("vote:update", onUpdate);
-        room.onMessage("vote:queued", onQueued);
         room.onMessage("vote:end",    onEnd);
         room.onMessage("vote:cancel", onCancel);
 
-        // Ask server to replay current vote state (handles reconnects and late page loads)
+        // Ask server to replay current vote states (handles reconnects and late page loads)
         room.send("vote:sync");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [room]);
@@ -147,12 +150,13 @@ export default function GameShell({
         setChatInput("");
     }
 
-    function castVote(choice: boolean) {
-        if (!activeVote || activeVote.myChoice !== null) return;
+    function castVote(voteId: string, choice: boolean) {
+        const vote = activeVotes.find(v => v.voteId === voteId);
+        if (!vote || vote.myChoice !== null) return;
         const isEligible = !!players.find(p => p.id === sessionId && p.isConnected);
         if (!isEligible) return;
-        room.send("vote:cast", { voteId: activeVote.voteId, choice });
-        setActiveVote(prev => prev ? { ...prev, myChoice: choice } : null);
+        room.send("vote:cast", { voteId, choice });
+        setActiveVotes(prev => prev.map(v => v.voteId === voteId ? { ...v, myChoice: choice } : v));
     }
 
     // ── Generic scoreboard ────────────────────────────────────────────────────
@@ -329,6 +333,30 @@ export default function GameShell({
 
             <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
                 {header}
+                {(showForceEndRound || showForceReturn) && (
+                    <div className="ml-auto flex items-center gap-1 shrink-0">
+                        {showForceEndRound && (
+                            <button
+                                onClick={() => setConfirm({ label: "Terminer la manche en cours ?", action: () => room.send("forceEndRound") })}
+                                title="Terminer la manche"
+                                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-400 border border-gray-800 hover:border-orange-900/60 rounded-lg px-2.5 py-1.5 transition-colors"
+                            >
+                                <Flag className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Manche</span>
+                            </button>
+                        )}
+                        {showForceReturn && (
+                            <button
+                                onClick={() => setConfirm({ label: "Terminer la partie et revenir au lobby ?", action: () => room.send("forceReturnToLobby") })}
+                                title="Terminer la partie"
+                                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/60 rounded-lg px-2.5 py-1.5 transition-colors"
+                            >
+                                <SkipForward className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Partie</span>
+                            </button>
+                        )}
+                    </div>
+                )}
             </header>
 
             {/* Mobile tabs */}
@@ -417,84 +445,10 @@ export default function GameShell({
                             </div>
                         )}
 
-                        {/* Boutons host */}
-                        {(showForceEndRound || showForceReturn) && (
-                            <div className="mt-3 border-t border-gray-800 pt-3 flex flex-col gap-2">
-                                <p className="text-xs uppercase tracking-widest text-gray-600 font-semibold mb-1">Hôte</p>
-                                {showForceEndRound && (
-                                    <button
-                                        onClick={() => setConfirm({ label: "Terminer la manche en cours ?", action: () => room.send("forceEndRound") })}
-                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-orange-400 border border-gray-800 hover:border-orange-900/60 rounded-lg py-1.5 transition-colors"
-                                    >
-                                        <Flag className="w-3 h-3" />
-                                        Terminer la manche
-                                    </button>
-                                )}
-                                {showForceReturn && (
-                                    <button
-                                        onClick={() => setConfirm({ label: "Terminer la partie et revenir au lobby ?", action: () => room.send("forceReturnToLobby") })}
-                                        className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/60 rounded-lg py-1.5 transition-colors"
-                                    >
-                                        <SkipForward className="w-3 h-3" />
-                                        Terminer la partie
-                                    </button>
-                                )}
-                            </div>
-                        )}
                     </div>
 
                     <div className={`${mobileTab === "scores" ? "hidden lg:flex" : "flex"} flex-col flex-1 min-h-0`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2 shrink-0">Chat</p>
-                        {/* Vote panel */}
-                        {activeVote && (
-                            <div className="mx-3 mb-2 rounded-xl border border-indigo-800/60 bg-indigo-950/60 p-3 flex flex-col gap-2 shrink-0">
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                        <p className="text-xs font-semibold text-indigo-200 leading-snug">{activeVote.question}</p>
-                                        {activeVote.queueLength > 0 && (
-                                            <p className="text-[10px] text-indigo-400/70">{activeVote.queueLength} en attente</p>
-                                        )}
-                                    </div>
-                                    <VoteTimer deadline={activeVote.deadline} />
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="text-emerald-400 font-semibold">{activeVote.yesCount}</span>
-                                    <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
-                                        {activeVote.yesCount + activeVote.noCount > 0 && (
-                                            <div
-                                                className="h-full bg-emerald-500 transition-all"
-                                                style={{ width: `${(activeVote.yesCount / (activeVote.yesCount + activeVote.noCount)) * 100}%` }}
-                                            />
-                                        )}
-                                    </div>
-                                    <span className="text-red-400 font-semibold">{activeVote.noCount}</span>
-                                </div>
-                                {activeVote.targetPlayerId === sessionId ? (
-                                    <p className="text-xs text-gray-500 text-center italic">Vous êtes concerné par ce vote.</p>
-                                ) : activeVote.myChoice === null ? (
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => castVote(true)}
-                                            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-800/60 transition-colors"
-                                        >
-                                            {activeVote.yesLabel}
-                                        </button>
-                                        <button
-                                            onClick={() => castVote(false)}
-                                            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-900/40 hover:bg-red-900/70 text-red-300 border border-red-900/60 transition-colors"
-                                        >
-                                            {activeVote.noLabel}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-gray-500 text-center">
-                                        Vote envoyé : <span className={activeVote.myChoice ? "text-emerald-400" : "text-red-400"}>
-                                            {activeVote.myChoice ? activeVote.yesLabel : activeVote.noLabel}
-                                        </span>
-                                    </p>
-                                )}
-                            </div>
-                        )}
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
                             {chatMessages.length === 0 && (
                                 <p className="text-gray-700 text-xs text-center mt-4">Aucun message.</p>
@@ -574,6 +528,56 @@ export default function GameShell({
                     </div>
                 </aside>
             </div>
+
+            {/* ── Votes flottants ────────────────────────────────────────────── */}
+            {activeVotes.some(v => v.myChoice === null) && (
+                <div className="fixed bottom-4 left-2 right-2 lg:left-4 lg:right-auto lg:w-72 flex flex-col gap-2 z-30 max-h-[55vh] overflow-y-auto pointer-events-none">
+                    {activeVotes.filter(v => v.myChoice === null).map((vote) => (
+                        <div key={vote.voteId} className="pointer-events-auto rounded-xl border border-indigo-800/60 bg-gray-950/95 backdrop-blur-sm shadow-xl p-3 flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-2">
+                                <p className="text-xs font-semibold text-indigo-200 leading-snug">{vote.question}</p>
+                                <VoteTimer deadline={vote.deadline} />
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                <span className="text-emerald-400 font-semibold tabular-nums">{vote.yesCount}</span>
+                                <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
+                                    {vote.yesCount + vote.noCount > 0 && (
+                                        <div
+                                            className="h-full bg-emerald-500 transition-all"
+                                            style={{ width: `${(vote.yesCount / (vote.yesCount + vote.noCount)) * 100}%` }}
+                                        />
+                                    )}
+                                </div>
+                                <span className="text-red-400 font-semibold tabular-nums">{vote.noCount}</span>
+                            </div>
+                            {vote.targetPlayerId === sessionId ? (
+                                <p className="text-xs text-gray-500 text-center italic">Vous êtes concerné par ce vote.</p>
+                            ) : vote.myChoice === null ? (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => castVote(vote.voteId, true)}
+                                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-800/60 transition-colors"
+                                    >
+                                        {vote.yesLabel}
+                                    </button>
+                                    <button
+                                        onClick={() => castVote(vote.voteId, false)}
+                                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-900/40 hover:bg-red-900/70 text-red-300 border border-red-900/60 transition-colors"
+                                    >
+                                        {vote.noLabel}
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-500 text-center">
+                                    Vote envoyé : <span className={vote.myChoice ? "text-emerald-400" : "text-red-400"}>
+                                        {vote.myChoice ? vote.yesLabel : vote.noLabel}
+                                    </span>
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* Round-end overlay */}
             {phase === "roundEnd" && (

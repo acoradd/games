@@ -125,7 +125,7 @@ export default function LobbyPage() {
     const [unreadChat, setUnreadChat] = useState(0);
     const mobileTabRef = useRef(mobileTab);
     useEffect(() => { mobileTabRef.current = mobileTab; }, [mobileTab]);
-    const [activeVote, setActiveVote] = useState<VoteState | null>(null);
+    const [activeVotes, setActiveVotes] = useState<VoteState[]>([]);
 
     const isHost = myPlayerId !== '' && myPlayerId === hostId;
     const selectedGame = gameModes.find((g) => g.slug === selectedSlug) ?? null;
@@ -218,18 +218,22 @@ export default function LobbyPage() {
 
                 // Vote events
                 room.onMessage("vote:start", (data: Omit<VoteState, 'myChoice'>) => {
-                    setActiveVote({ ...data, myChoice: null });
+                    setActiveVotes(prev => {
+                        if (prev.some(v => v.voteId === data.voteId)) return prev;
+                        return [...prev, { ...data, myChoice: null }];
+                    });
                 });
                 room.onMessage("vote:update", (data: { voteId: string; yesCount: number; noCount: number }) => {
-                    setActiveVote(prev => prev && prev.voteId === data.voteId
-                        ? { ...prev, yesCount: data.yesCount, noCount: data.noCount }
-                        : prev);
+                    setActiveVotes(prev => prev.map(v =>
+                        v.voteId === data.voteId ? { ...v, yesCount: data.yesCount, noCount: data.noCount } : v
+                    ));
                 });
-                room.onMessage("vote:queued", (data: { queueLength: number }) => {
-                    setActiveVote(prev => prev ? { ...prev, queueLength: data.queueLength } : prev);
+                room.onMessage("vote:end", (data: { voteId: string }) => {
+                    setActiveVotes(prev => prev.filter(v => v.voteId !== data.voteId));
                 });
-                room.onMessage("vote:end", () => setActiveVote(null));
-                room.onMessage("vote:cancel", () => setActiveVote(null));
+                room.onMessage("vote:cancel", (data: { voteId: string }) => {
+                    setActiveVotes(prev => prev.filter(v => v.voteId !== data.voteId));
+                });
 
                 // Ask server to replay current vote state (in case we navigated here mid-vote)
                 room.send("vote:sync");
@@ -343,10 +347,11 @@ export default function LobbyPage() {
         roomRef.current?.send('kick', {playerId});
     }
 
-    function castVote(choice: boolean) {
-        if (!activeVote || activeVote.myChoice !== null) return;
-        roomRef.current?.send("vote:cast", { voteId: activeVote.voteId, choice });
-        setActiveVote(prev => prev ? { ...prev, myChoice: choice } : null);
+    function castVote(voteId: string, choice: boolean) {
+        const vote = activeVotes.find(v => v.voteId === voteId);
+        if (!vote || vote.myChoice !== null) return;
+        roomRef.current?.send("vote:cast", { voteId, choice });
+        setActiveVotes(prev => prev.map(v => v.voteId === voteId ? { ...v, myChoice: choice } : v));
     }
 
     function initiateVote(type: 'mute_player' | 'unmute_player', targetPlayerId: string) {
@@ -682,56 +687,51 @@ export default function LobbyPage() {
                     <div className={`flex-1 flex flex-col min-h-0 ${mobileTab === 'joueurs' ? 'hidden lg:flex' : ''}`}>
                         <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold px-4 pt-3 pb-2">Chat</p>
 
-                        {/* Vote panel */}
-                        {activeVote && (
-                            <div className="mx-3 mb-2 rounded-xl border border-indigo-800/60 bg-indigo-950/60 p-3 flex flex-col gap-2 shrink-0">
+                        {/* Vote panels */}
+                        {activeVotes.filter(v => v.myChoice === null).map((vote) => (
+                            <div key={vote.voteId} className="mx-3 mb-2 rounded-xl border border-indigo-800/60 bg-indigo-950/60 p-3 flex flex-col gap-2 shrink-0">
                                 <div className="flex items-start justify-between gap-2">
-                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                        <p className="text-xs font-semibold text-indigo-200 leading-snug">{activeVote.question}</p>
-                                        {activeVote.queueLength > 0 && (
-                                            <p className="text-[10px] text-indigo-400/70">{activeVote.queueLength} en attente</p>
-                                        )}
-                                    </div>
-                                    <VoteTimer deadline={activeVote.deadline} />
+                                    <p className="text-xs font-semibold text-indigo-200 leading-snug">{vote.question}</p>
+                                    <VoteTimer deadline={vote.deadline} />
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="text-emerald-400 font-semibold">{activeVote.yesCount}</span>
+                                    <span className="text-emerald-400 font-semibold tabular-nums">{vote.yesCount}</span>
                                     <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
-                                        {activeVote.yesCount + activeVote.noCount > 0 && (
+                                        {vote.yesCount + vote.noCount > 0 && (
                                             <div
                                                 className="h-full bg-emerald-500 transition-all"
-                                                style={{ width: `${(activeVote.yesCount / (activeVote.yesCount + activeVote.noCount)) * 100}%` }}
+                                                style={{ width: `${(vote.yesCount / (vote.yesCount + vote.noCount)) * 100}%` }}
                                             />
                                         )}
                                     </div>
-                                    <span className="text-red-400 font-semibold">{activeVote.noCount}</span>
+                                    <span className="text-red-400 font-semibold tabular-nums">{vote.noCount}</span>
                                 </div>
-                                {activeVote.targetPlayerId === myPlayerId ? (
+                                {vote.targetPlayerId === myPlayerId ? (
                                     <p className="text-xs text-gray-500 text-center italic">Vous êtes concerné par ce vote.</p>
-                                ) : activeVote.myChoice === null ? (
+                                ) : vote.myChoice === null ? (
                                     <div className="flex gap-2">
                                         <button
-                                            onClick={() => castVote(true)}
+                                            onClick={() => castVote(vote.voteId, true)}
                                             className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700/40 hover:bg-emerald-700/70 text-emerald-300 border border-emerald-800/60 transition-colors"
                                         >
-                                            {activeVote.yesLabel}
+                                            {vote.yesLabel}
                                         </button>
                                         <button
-                                            onClick={() => castVote(false)}
+                                            onClick={() => castVote(vote.voteId, false)}
                                             className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-900/40 hover:bg-red-900/70 text-red-300 border border-red-900/60 transition-colors"
                                         >
-                                            {activeVote.noLabel}
+                                            {vote.noLabel}
                                         </button>
                                     </div>
                                 ) : (
                                     <p className="text-xs text-gray-500 text-center">
-                                        Vote envoyé : <span className={activeVote.myChoice ? "text-emerald-400" : "text-red-400"}>
-                                            {activeVote.myChoice ? activeVote.yesLabel : activeVote.noLabel}
+                                        Vote envoyé : <span className={vote.myChoice ? "text-emerald-400" : "text-red-400"}>
+                                            {vote.myChoice ? vote.yesLabel : vote.noLabel}
                                         </span>
                                     </p>
                                 )}
                             </div>
-                        )}
+                        ))}
 
                         <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2 min-h-0">
                             {chatMessages.length === 0 && (
