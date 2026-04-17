@@ -1,5 +1,20 @@
 import type {Room} from '@colyseus/sdk';
-import {Crown, Eye, Flag, LogOut, Play, Send, SkipForward, Trophy, UserPlus, VolumeX, WifiOff, X} from 'lucide-react';
+import {
+    Ban,
+    Crown,
+    Eye,
+    Flag,
+    LogOut,
+    Play,
+    Send,
+    SkipForward,
+    Trophy,
+    UserMinus,
+    UserPlus,
+    VolumeX,
+    WifiOff,
+    X
+} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import type {ChatMsg, GenericGameState, LobbyPlayer, LobbyState, VoteState} from '../../models/Lobby';
 import Avatar from '../Avatar';
@@ -221,7 +236,34 @@ export default function GameShell({
                                 </span>
                             </span>
                             <span className="flex items-center gap-1.5 shrink-0">
-                                {!isMe && (
+                                {!isMe && !isHost && (
+                                    <>
+                                        <button
+                                            onClick={() => room.send("vote:initiate", { type: isMuted ? "unmute_player" : "mute_player", targetPlayerId: id })}
+                                            title={isMuted ? "Voter pour débloquer le chat" : "Voter pour bloquer le chat"}
+                                            className={isMuted
+                                                ? "text-red-500 hover:text-emerald-400 transition-colors"
+                                                : "opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"}
+                                        >
+                                            <VolumeX className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                            onClick={() => room.send("vote:initiate", { type: "kick_player", targetPlayerId: id })}
+                                            title="Voter pour expulser"
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-orange-400"
+                                        >
+                                            <UserMinus className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                            onClick={() => room.send("vote:initiate", { type: "ban_player", targetPlayerId: id })}
+                                            title="Voter pour bannir de la room"
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-500"
+                                        >
+                                            <Ban className="w-3 h-3" />
+                                        </button>
+                                    </>
+                                )}
+                                {!isMe && isHost && (
                                     <button
                                         onClick={() => room.send("vote:initiate", { type: isMuted ? "unmute_player" : "mute_player", targetPlayerId: id })}
                                         title={isMuted ? "Voter pour débloquer le chat" : "Voter pour bloquer le chat"}
@@ -267,11 +309,40 @@ export default function GameShell({
                                                 {isMe && <span className="text-gray-600 text-xs ml-1">(vous)</span>}
                                             </span>
                                             {!isMe && p.wantsToPlay && (
-                                                <UserPlus className="w-3 h-3 text-indigo-400 shrink-0" title="Veut jouer la prochaine manche" />
+                                                <span title="Veut jouer la prochaine manche">
+                                                    <UserPlus className="w-3 h-3 text-indigo-400 shrink-0" />
+                                                </span>
                                             )}
                                         </span>
                                     </div>
-                                    {!isMe && (
+                                    {!isMe && !p.isHost && (
+                                        <>
+                                            <button
+                                                onClick={() => room.send("vote:initiate", { type: p.isMuted ? "unmute_player" : "mute_player", targetPlayerId: p.id })}
+                                                title={p.isMuted ? "Voter pour débloquer le chat" : "Voter pour bloquer le chat"}
+                                                className={p.isMuted
+                                                    ? "shrink-0 text-red-500 hover:text-emerald-400 transition-colors"
+                                                    : "shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-400"}
+                                            >
+                                                <VolumeX className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                                onClick={() => room.send("vote:initiate", { type: "kick_player", targetPlayerId: p.id })}
+                                                title="Voter pour expulser"
+                                                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-orange-400"
+                                            >
+                                                <UserMinus className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                                onClick={() => room.send("vote:initiate", { type: "ban_player", targetPlayerId: p.id })}
+                                                title="Voter pour bannir de la room"
+                                                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-500"
+                                            >
+                                                <Ban className="w-3 h-3" />
+                                            </button>
+                                        </>
+                                    )}
+                                    {!isMe && p.isHost && (
                                         <button
                                             onClick={() => room.send("vote:initiate", { type: p.isMuted ? "unmute_player" : "mute_player", targetPlayerId: p.id })}
                                             title={p.isMuted ? "Voter pour débloquer le chat" : "Voter pour bloquer le chat"}
@@ -533,9 +604,21 @@ export default function GameShell({
             {activeVotes.some(v => v.myChoice === null) && (
                 <div className="fixed bottom-4 left-2 right-2 lg:left-4 lg:right-auto lg:w-72 flex flex-col gap-2 z-30 max-h-[55vh] overflow-y-auto pointer-events-none">
                     {activeVotes.filter(v => v.myChoice === null).map((vote) => (
-                        <div key={vote.voteId} className="pointer-events-auto rounded-xl border border-indigo-800/60 bg-gray-950/95 backdrop-blur-sm shadow-xl p-3 flex flex-col gap-2">
+                        <div key={vote.voteId} className={`pointer-events-auto rounded-xl border bg-gray-950/95 backdrop-blur-sm shadow-xl p-3 flex flex-col gap-2 ${
+                            vote.type === "ban_player"
+                                ? "border-red-800/70"
+                                : vote.type === "kick_player"
+                                    ? "border-orange-800/70"
+                                    : "border-indigo-800/60"
+                        }`}>
                             <div className="flex items-start justify-between gap-2">
-                                <p className="text-xs font-semibold text-indigo-200 leading-snug">{vote.question}</p>
+                                <p className={`text-xs font-semibold leading-snug ${
+                                    vote.type === "ban_player"
+                                        ? "text-red-300"
+                                        : vote.type === "kick_player"
+                                            ? "text-orange-300"
+                                            : "text-indigo-200"
+                                }`}>{vote.question}</p>
                                 <VoteTimer deadline={vote.deadline} />
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-gray-400">

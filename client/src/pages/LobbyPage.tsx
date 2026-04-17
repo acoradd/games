@@ -1,15 +1,15 @@
 import type {Room} from '@colyseus/sdk';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {Clipboard, Check, Eye, Link, Play, Send, X, WifiOff, Plus, Loader2, Crown, VolumeX} from 'lucide-react';
+import {Ban, Check, Clipboard, Crown, Eye, Link, Loader2, Play, Plus, Send, VolumeX, WifiOff, X} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
+import Avatar from '../components/Avatar';
 import type {GameMode, GameOptionsValues} from '../models/GameMode';
 import type {ChatMsg, LobbyPlayer, LobbyState, VoteState} from '../models/Lobby';
 import {getGameModes} from '../services/gameModeService';
 import {joinLobby} from '../services/lobbyService';
 import {getStoredPlayer} from '../services/playerService';
 import {clearCurrentRoom, getCurrentRoom, setCurrentRoom} from '../webservices/currentLobbyRoom';
-import Avatar from '../components/Avatar';
 
 function getBigUrl(slug: string) {
     return `/assets/games/${slug}/big.png`;
@@ -358,6 +358,10 @@ export default function LobbyPage() {
         roomRef.current?.send("vote:initiate", { type, targetPlayerId });
     }
 
+    function handleBan(playerId: string) {
+        roomRef.current?.send('ban', { playerId });
+    }
+
     async function handleCopy(type: 'code' | 'link') {
         const text = type === 'code'
             ? roomId
@@ -600,9 +604,6 @@ export default function LobbyPage() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                            <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
-                                                {p.isReady ? 'prêt' : 'attente'}
-                                            </span>
                                             {!isMe && (
                                                 <button
                                                     onClick={() => initiateVote(p.isMuted ? 'unmute_player' : 'mute_player', p.id)}
@@ -615,14 +616,27 @@ export default function LobbyPage() {
                                                 </button>
                                             )}
                                             {isHost && !isMe && (
-                                                <button
-                                                    onClick={() => handleKick(p.id)}
-                                                    title="Expulser"
-                                                    className="text-gray-600 hover:text-red-400 transition-colors"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
+                                                <>
+                                                    <button
+                                                        onClick={() => handleKick(p.id)}
+                                                        title="Expulser"
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-orange-400 transition-colors"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleBan(p.id)}
+                                                        title="Bannir de la room"
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-500 transition-colors"
+                                                    >
+                                                        <Ban className="w-3 h-3" />
+                                                    </button>
+                                                </>
                                             )}
+
+                                            <span className={p.isReady ? 'text-emerald-400' : 'text-gray-600'}>
+                                                {p.isReady ? 'prêt' : 'attente'}
+                                            </span>
                                         </div>
                                     </li>
                                 );
@@ -666,13 +680,22 @@ export default function LobbyPage() {
                                                         </button>
                                                     )}
                                                     {isHost && !isMe && (
-                                                        <button
-                                                            onClick={() => handleKick(p.id)}
-                                                            title="Expulser"
-                                                            className="text-gray-600 hover:text-red-400 transition-colors"
-                                                        >
-                                                            <X className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleKick(p.id)}
+                                                                title="Expulser"
+                                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-orange-400 transition-colors"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleBan(p.id)}
+                                                                title="Bannir de la room"
+                                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-600 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <Ban className="w-3 h-3" />
+                                                            </button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </li>
@@ -772,9 +795,21 @@ export default function LobbyPage() {
             {activeVotes.some(v => v.myChoice === null) && (
                 <div className="fixed bottom-20 left-2 right-2 lg:left-4 lg:right-auto lg:w-72 flex flex-col gap-2 z-30 max-h-[50vh] overflow-y-auto pointer-events-none">
                     {activeVotes.filter(v => v.myChoice === null).map((vote) => (
-                        <div key={vote.voteId} className="pointer-events-auto rounded-xl border border-indigo-800/60 bg-gray-950/95 backdrop-blur-sm shadow-xl p-3 flex flex-col gap-2">
+                        <div key={vote.voteId} className={`pointer-events-auto rounded-xl border bg-gray-950/95 backdrop-blur-sm shadow-xl p-3 flex flex-col gap-2 ${
+                            vote.type === "ban_player"
+                                ? "border-red-800/70"
+                                : vote.type === "kick_player"
+                                    ? "border-orange-800/70"
+                                    : "border-indigo-800/60"
+                        }`}>
                             <div className="flex items-start justify-between gap-2">
-                                <p className="text-xs font-semibold text-indigo-200 leading-snug">{vote.question}</p>
+                                <p className={`text-xs font-semibold leading-snug ${
+                                    vote.type === "ban_player"
+                                        ? "text-red-300"
+                                        : vote.type === "kick_player"
+                                            ? "text-orange-300"
+                                            : "text-indigo-200"
+                                }`}>{vote.question}</p>
                                 <VoteTimer deadline={vote.deadline} />
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-gray-400">

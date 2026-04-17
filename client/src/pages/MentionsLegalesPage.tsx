@@ -1,5 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import {ArrowLeft} from 'lucide-react';
+import {useNavigate} from 'react-router-dom';
 
 export default function MentionsLegalesPage() {
     const navigate = useNavigate();
@@ -36,7 +36,7 @@ export default function MentionsLegalesPage() {
                 <section>
                     <h2 className="text-base font-semibold text-white mb-3">Licence open source</h2>
                     <p>
-                        Le code source d'Accoradd Games est publié sous licence <strong className="text-white">MIT</strong>.
+                        Le code source d'AccoGames est publié sous licence <strong className="text-white">MIT</strong>.
                         Vous êtes libre de l'utiliser, le modifier et le redistribuer selon les termes de cette licence.
                     </p>
                 </section>
@@ -57,7 +57,7 @@ export default function MentionsLegalesPage() {
             </main>
 
             <footer className="border-t border-gray-800 px-6 py-4 text-center text-xs text-gray-600">
-                Accoradd Games — Licence MIT — Dernière mise à jour : avril 2026
+                AccoGames — Licence MIT — Dernière mise à jour : avril 2026
             </footer>
         </div>
     );

@@ -153,7 +153,7 @@ export interface MotusPlayerState {
 
 // ── Vote system ────────────────────────────────────────────────────────────
 
-export type VoteType = 'word_quality' | 'skip_turn' | 'mute_player' | 'unmute_player';
+export type VoteType = 'word_quality' | 'skip_turn' | 'mute_player' | 'unmute_player' | 'kick_player' | 'ban_player';
 
 export interface VoteState {
     voteId: string;

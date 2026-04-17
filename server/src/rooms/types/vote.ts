@@ -1,4 +1,4 @@
-export type VoteType = "word_quality" | "skip_turn" | "mute_player" | "unmute_player";
+export type VoteType = "word_quality" | "skip_turn" | "mute_player" | "unmute_player" | "kick_player" | "ban_player";
 
 export interface VoteConfig {
     type: VoteType;

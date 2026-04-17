@@ -1,5 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import {ArrowLeft} from 'lucide-react';
+import {useNavigate} from 'react-router-dom';
 
 export default function CguPage() {
     const navigate = useNavigate();
@@ -23,7 +23,7 @@ export default function CguPage() {
                 <section>
                     <h2 className="text-base font-semibold text-white mb-3">1. Objet</h2>
                     <p>
-                        Les présentes Conditions Générales d'Utilisation (CGU) régissent l'accès et l'utilisation du site <strong className="text-white">Accoradd Games</strong>,
+                        Les présentes Conditions Générales d'Utilisation (CGU) régissent l'accès et l'utilisation du site <strong className="text-white">AccoGames</strong>,
                         portail de mini-jeux en ligne multijoueur édité par Thomas DA ROCHA.
                     </p>
                 </section>
@@ -67,7 +67,7 @@ export default function CguPage() {
 
                 <section>
                     <h2 className="text-base font-semibold text-white mb-3">7. Propriété intellectuelle et open source</h2>
-                    <p>Le code source d'Accoradd Games est publié sous licence <strong className="text-white">MIT</strong>. Les visuels ont été générés par Google Gemini et sont soumis aux conditions d'utilisation de ce service.</p>
+                    <p>Le code source d'AccoGames est publié sous licence <strong className="text-white">MIT</strong>. Les visuels ont été générés par Google Gemini et sont soumis aux conditions d'utilisation de ce service.</p>
                 </section>
 
                 <section>
@@ -99,7 +99,7 @@ export default function CguPage() {
             </main>
 
             <footer className="border-t border-gray-800 px-6 py-4 text-center text-xs text-gray-600">
-                Accoradd Games — Licence MIT — Dernière mise à jour : avril 2026
+                AccoGames — Licence MIT — Dernière mise à jour : avril 2026
             </footer>
         </div>
     );

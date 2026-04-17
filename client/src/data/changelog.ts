@@ -12,6 +12,17 @@ export interface ChangelogVersion {
 
 export const changelog: ChangelogVersion[] = [
     {
+        version: '0.11',
+        date: '17/04/2026',
+        entries: [
+            { date: '17/04/2026', type: 'feat', label: 'Vote pour expulser ou bannir un joueur pendant une partie (kick/ban visible au survol dans le scoreboard)' },
+            { date: '17/04/2026', type: 'feat', label: 'L\'hôte peut expulser ou bannir directement un joueur depuis le lobby' },
+            { date: '17/04/2026', type: 'feat', label: 'Le ban est persistant pour toute la room : un joueur banni ne peut plus se reconnecter' },
+            { date: '17/04/2026', type: 'feat', label: 'L\'hôte ne peut pas être ciblé par un vote kick/ban' },
+            { date: '17/04/2026', type: 'fix', label: 'Expulsion/ban pendant une partie : toutes les données du joueur sont supprimées du scoreboard immédiatement' },
+        ],
+    },
+    {
         version: '0.10',
         date: '16/04/2026',
         entries: [

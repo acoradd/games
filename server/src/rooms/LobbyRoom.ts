@@ -34,6 +34,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     private activeHandler: GameHandler | null = null;
     private voteManager: VoteManager | null = null;
 
+    /** Players permanently banned from this room (persist across games, reset on room dispose). */
+    private bannedPlayerIds = new Set<string>();
+    /** Players currently muted (persist across games and reconnections within this room). */
+    private mutedPlayerIds  = new Set<string>();
+
     // ── Room lifecycle ────────────────────────────────────────────────────────
 
     onCreate(_options: Record<string, unknown>) {
@@ -126,6 +131,16 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                 targetClient.send("kicked");
                 targetClient.leave(4001);
             }
+        });
+
+        this.onMessage("ban", (client: Client, data: { playerId: string }) => {
+            if (!this.isHost(client.sessionId)) return;
+            if (this.state.status !== "lobby") return;
+            const target = data?.playerId;
+            if (!target || target === this.state.hostId) return;
+            if (!this.state.players.has(target)) return;
+            this.bannedPlayerIds.add(target);
+            this.forceRemovePlayer(target, "vote_ban");
         });
 
         this.onMessage("start", async (client: Client) => {
@@ -253,7 +268,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.voteManager.cast(data.voteId, playerIdStr, data.choice);
         });
 
-        this.onMessage("vote:initiate", (client: Client, data: { type: "skip_turn" | "mute_player" | "unmute_player"; targetPlayerId: string }) => {
+        this.onMessage("vote:initiate", (client: Client, data: { type: "skip_turn" | "mute_player" | "unmute_player" | "kick_player" | "ban_player"; targetPlayerId: string }) => {
             // skip_turn requires an active game
             if (data.type === "skip_turn" && this.state.status !== "game") return;
             const initiatorIdStr = this.getPlayerIdStr(client.sessionId);
@@ -264,6 +279,8 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             const target = this.state.players.get(data.targetPlayerId);
             if (!target || !target.isConnected) return;
             if (data.targetPlayerId === initiatorIdStr) return;
+            // L'hôte ne peut pas être kick/ban
+            if ((data.type === "kick_player" || data.type === "ban_player") && target.isHost) return;
 
             const eligible = [...this.state.players.entries()]
                 .filter(([id, p]) => p.isConnected && id !== data.targetPlayerId)
@@ -313,13 +330,13 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                     eligible,
                     (result) => {
                         if (result.passed) {
+                            this.mutedPlayerIds.add(data.targetPlayerId);
                             const p = this.state.players.get(data.targetPlayerId);
                             if (p) p.isMuted = true;
                         }
                     },
                 );
-            } else {
-                // unmute_player
+            } else if (data.type === "unmute_player") {
                 if (!target.isMuted) return;
                 this.voteManager!.start(
                     {
@@ -337,8 +354,51 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
                     eligible,
                     (result) => {
                         if (result.passed) {
+                            this.mutedPlayerIds.delete(data.targetPlayerId);
                             const p = this.state.players.get(data.targetPlayerId);
                             if (p) p.isMuted = false;
+                        }
+                    },
+                );
+            } else if (data.type === "kick_player") {
+                this.voteManager!.start(
+                    {
+                        type: "kick_player",
+                        initiatorId: initiatorIdStr,
+                        question: `Expulser ${u} ?`,
+                        yesLabel: "Expulser",
+                        noLabel: "Garder",
+                        targetPlayerId: data.targetPlayerId,
+                        targetUsername: u,
+                        resultMessage: (r) => r.passed
+                            ? `${u} a été expulsé de la room`
+                            : `${u} reste dans la room`,
+                    },
+                    eligible,
+                    (result) => {
+                        if (result.passed) this.forceRemovePlayer(data.targetPlayerId, "vote_kick");
+                    },
+                );
+            } else {
+                // ban_player
+                this.voteManager!.start(
+                    {
+                        type: "ban_player",
+                        initiatorId: initiatorIdStr,
+                        question: `Bannir ${u} définitivement ?`,
+                        yesLabel: "Bannir",
+                        noLabel: "Annuler",
+                        targetPlayerId: data.targetPlayerId,
+                        targetUsername: u,
+                        resultMessage: (r) => r.passed
+                            ? `${u} a été banni de la room`
+                            : `${u} n'est pas banni`,
+                    },
+                    eligible,
+                    (result) => {
+                        if (result.passed) {
+                            this.bannedPlayerIds.add(data.targetPlayerId);
+                            this.forceRemovePlayer(data.targetPlayerId, "vote_ban");
                         }
                     },
                 );
@@ -374,6 +434,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
         try { payload = verifyToken(options.token) as { playerId: number; username: string }; }
         catch { throw new ServerError(401, "Token invalide"); }
 
+        if (this.bannedPlayerIds.has(String(payload.playerId))) {
+            throw new ServerError(403, "Vous avez été banni de cette room");
+        }
+
         const dbPlayer = await prisma.player.findUnique({
             where: { id: payload.playerId },
             select: { email: true, displayName: true },
@@ -402,6 +466,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             existing.isConnected = true;
             existing.username    = auth.displayName.trim().slice(0, 32);
             existing.gravatarUrl = auth.gravatarUrl;
+            existing.isMuted     = this.mutedPlayerIds.has(playerIdStr);
             if (this.state.status === "game") existing.isReady = true;
 
             if (this.state.isStarted
@@ -428,10 +493,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             player.sessionId   = client.sessionId;
             player.username    = auth.displayName.trim().slice(0, 32);
             player.gravatarUrl = auth.gravatarUrl;
-            player.isConnected = true;
-            player.isHost      = isFirst;
-            player.isReady     = false;
+            player.isConnected  = true;
+            player.isHost       = isFirst;
+            player.isReady      = false;
             player.isEliminated = false;
+            player.isMuted      = this.mutedPlayerIds.has(playerIdStr);
             // Spectator only if game is running
             player.isSpectator  = this.state.isStarted;
             if (isFirst) this.state.hostId = playerIdStr;
@@ -532,6 +598,82 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     }
 
 
+    /**
+     * Forcefully removes a player from the room (kick or ban).
+     * Deletes all their state, informs the game handler if needed,
+     * and disconnects the client. onLeave will bail out early because
+     * the session maps are cleaned up first.
+     */
+    private forceRemovePlayer(playerIdStr: string, reason: "vote_kick" | "vote_ban") {
+        const player = this.state.players.get(playerIdStr);
+        if (!player) return;
+
+        // 1. Clean up session maps before triggering leave so onLeave is a no-op
+        const targetNumericId = parseInt(playerIdStr, 10);
+        const targetSessionId = this.playerIdMap.get(targetNumericId);
+        if (targetSessionId) this.sessionToPlayerId.delete(targetSessionId);
+        this.playerIdMap.delete(targetNumericId);
+
+        // 2. Inform game handler + purge from game state JSON
+        if (this.state.status === "game" && this.activeHandler) {
+            if (!player.isEliminated && !player.isSpectator) {
+                player.isEliminated = true;
+                this.activeHandler.onEliminate(playerIdStr);
+            }
+            // Completely remove the player's data from the game state so they
+            // no longer appear in the scoreboard or any game-specific structures.
+            this.purgePlayerFromGameState(playerIdStr);
+        }
+
+        // 3. Remove from roster and re-elect host if needed
+        const wasHost = player.isHost;
+        this.state.players.delete(playerIdStr);
+        if (wasHost && this.state.players.size > 0) {
+            const nextEntry = this.state.players.entries().next().value as [string, LobbyPlayer] | undefined;
+            if (nextEntry) {
+                nextEntry[1].isHost = true;
+                this.state.hostId  = nextEntry[0];
+            }
+        }
+
+        // 4. Disconnect the client
+        if (targetSessionId) {
+            const targetClient = this.clients.find((c) => c.sessionId === targetSessionId);
+            if (targetClient) {
+                targetClient.send("kicked", { reason });
+                targetClient.leave(4001);
+            }
+        }
+
+        console.log(`[LobbyRoom ${this.roomId}] ${player.username} ${reason === "vote_ban" ? "banned" : "kicked"} by vote`);
+    }
+
+    /**
+     * Removes all traces of a player from gameStateJson.
+     * Covers every field used across all game handlers.
+     */
+    private purgePlayerFromGameState(playerIdStr: string): void {
+        let gs: Record<string, unknown>;
+        try { gs = JSON.parse(this.state.gameStateJson) as Record<string, unknown>; }
+        catch { return; }
+
+        // Arrays: playerOrder, roundWinnerIds
+        for (const field of ["playerOrder", "roundWinnerIds"] as const) {
+            if (Array.isArray(gs[field])) {
+                gs[field] = (gs[field] as string[]).filter((id) => id !== playerIdStr);
+            }
+        }
+
+        // Record<string, *>: playerNames, roundPoints, scores, players, playerAvatars
+        for (const field of ["playerNames", "roundPoints", "scores", "players", "playerAvatars"] as const) {
+            if (gs[field] && typeof gs[field] === "object" && !Array.isArray(gs[field])) {
+                delete (gs[field] as Record<string, unknown>)[playerIdStr];
+            }
+        }
+
+        this.state.gameStateJson = JSON.stringify(gs);
+    }
+
     private eliminatePlayer(playerIdStr: string) {
         const player = this.state.players.get(playerIdStr);
         if (!player) return;
@@ -561,10 +703,10 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
             this.state.players.delete(playerIdStr);
         }
 
-        this.state.players.forEach((p) => {
+        this.state.players.forEach((p, playerIdStr) => {
             p.isEliminated = false;
             p.isHost       = false;
-            p.isMuted      = false;
+            p.isMuted      = this.mutedPlayerIds.has(playerIdStr);
             p.wantsToPlay  = false;
             // Les spectateurs restent spectateurs (auto-prêts) ; les joueurs repassent en attente
             p.isReady      = p.isSpectator;
