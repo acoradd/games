@@ -28,7 +28,7 @@
   "devDependencies": {
     "@colyseus/loadtest": "^0.17.7",
     "@colyseus/sdk": "^0.17.17",
-    "@colyseus/testing": "^0.17.10",
+    "@colyseus/testing": "^0.18.0",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.1",
