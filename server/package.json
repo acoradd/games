@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/colyseus/create-colyseus#readme",
   "devDependencies": {
-    "@colyseus/loadtest": "^0.17.7",
+    "@colyseus/loadtest": "^0.18.0",
     "@colyseus/sdk": "^0.17.17",
     "@colyseus/testing": "^0.17.10",
     "@types/bcrypt": "^6.0.0",
